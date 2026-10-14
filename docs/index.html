@@ -87,7 +87,7 @@
         }
 
         .link-alt {
-            background: #0f172a;
+            background: #a25309;
         }
 
         .benefits {
@@ -134,19 +134,32 @@
             color: var(--ink);
         }
 
+
+        .limits ul {
+            margin: 0;
+            padding-left: 20px;
+            color: var(--muted);
+            line-height: 1.45;
+        }
+
+        .limits li+li {
+            margin-top: 6px;
+        }
+
         .limits p .note {
             margin: 0;
             font-size: 0.92rem;
         }
 
         .limits p code {
-            background-color: black;
+            background-color: #a25309;
             color: white;
             padding: 2px 6px;
             border-radius: 4px;
             font-family: monospace;
             font-size: 1 em;
         }
+
     </style>
 </head>
 
@@ -192,8 +205,10 @@
             <p class="note"><strong>If these small differences matter, do not use this calculator.
                     Use a tool designed for higher precision.</strong></p>
             <p class="note">Defined in <code>app.js</code>:
-                <code>normalizeFloatingError()</code> uses <code>&lt; 1e-12</code>;
-                <code>formatResult()</code> uses <code>toPrecision(15)</code>.
+            <ul>
+                <li>normalizeFloatingError() uses &lt; 1e-12</li>
+                <li>formatResult() uses toPrecision(15)</li>
+            </ul>
             </p>
         </section>
 
