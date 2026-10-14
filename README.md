@@ -31,8 +31,7 @@ python3 -m http.server 8080
 
 4. Open in your browser:
 
-- http://localhost:8080/calculator.html
-- http://localhost:8080/availability_and_math_correct_test.html
+- http://localhost:8080/
 
 5. Edit files, refresh the browser, and test your own changes.
 
@@ -86,13 +85,6 @@ Because of this setup, the [live site](https://noa-jou.github.io/Frontend-Calcul
 - Safer behavior for edge cases like divide-by-zero and malformed input
 - Cleaner display formatting for common floating-point noise (example: `0.30000000000000004` -> `0.3`)
 - A visual test dashboard with step-by-step categories (availability, math, accessibility, security, and fuzz/invariant checks)
-
-
-## What this new version still limits
-
-- Decimal results are formatted for readability, so very long decimal tails are rounded in the display.
-- The calculator uses JavaScript number precision, so the last few digits of repeating decimals may be rounded (example: `2/3` shows as `0.666666666666667`).
-- Locale formats and advanced math syntax are not supported yet (for example comma decimals like `3,14`, scientific notation, or function-style input).
 
 
 ## Why I share this
