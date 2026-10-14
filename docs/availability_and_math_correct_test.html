@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Calculator Comprehensive Test Suite - Project Review Regression</title>
+    <title>Calculator Test Suite</title>
     <link rel="stylesheet" href="./style2.css" />
 </head>
 
@@ -14,14 +14,15 @@
         <section class="panel">
             <div class="panel-head">
                 <div>
-                    <h1>Calculator Comprehensive Test Suite</h1>
+                    <h1>Calculator Test Suite</h1>
                 </div>
                 <div class="head-actions">
                     <label class="small" for="modeSelect">Mode Select :</label>
                     <select id="modeSelect" class="mode-select" aria-label="Choose test mode">
-                        <option value="math" selected>Core Math</option>
-                        <option value="practical">Daily Use</option>
-                        <option value="full">Advanced</option>
+                        <option value="math" selected>1. Basic Operations</option>
+                        <option value="practical">2. Decimals and Signed Numbers</option>
+                        <option value="full">3. Parentheses and Nested Parentheses</option>
+                        <option value="usability">4. Controls, Errors and Page Checks</option>
                     </select>
                     <button id="runBtn" type="button">Run Tests</button>
                 </div>
@@ -31,18 +32,18 @@
                 <p class="mode-guide-copy">Start here: 1. Read the mode guide, 2. choose a mode, 3. then click
                     Run Tests.</p>
                 <ul class="mode-compare-list">
-                    <li><strong>Core Math:</strong> test cases #1-46 (core math section only).</li>
-                    <li><strong>Daily Use:</strong> test cases #47-69 (daily-use section only).</li>
-                    <li><strong>Advanced:</strong> test cases #70-88 (advanced section only).</li>
+                    <li><strong>1. Basic Operations:</strong> addition and subtraction, then multiplication and division, then mixed sums.</li>
+                    <li><strong>2. Decimals and Signed Numbers:</strong> decimal places, positive and negative numbers, and tiny values.</li>
+                    <li><strong>3. Parentheses and Nested Parentheses:</strong> single pairs of parentheses and parentheses inside parentheses.</li>
+                    <li><strong>4. Controls, Errors and Page Checks:</strong> keyboard use, mistakes, safe text handling and basic page settings.</li>
                 </ul>
                 <section class="mode-guide" aria-live="polite" aria-label="Mode explanation">
                     <details id="modeGuideDetails" class="mode-guide-details" open>
                         <summary id="modeGuideSummary" class="mode-guide-summary">Mode guide: selected mode details
                             are shown below (click to hide or show)</summary>
-                        <p id="modeGuideTitle" class="mode-guide-title">Selected now: Core Math</p>
-                        <p id="modeGuideCopy" class="mode-guide-copy">Runs only the core math section. This section owns test
-                            cases #1-46.</p>
-                        <p class="mode-guide-subtitle">This mode will run these check groups:</p>
+                        <p id="modeGuideTitle" class="mode-guide-title">Selected now: 1. Basic Operations</p>
+                        <p id="modeGuideCopy" class="mode-guide-copy">Start with addition and subtraction, then multiplication and division. In mixed sums, multiply and divide first.</p>
+                        <p class="mode-guide-subtitle">This mode will run these tests:</p>
                         <ul id="modeGuideList" class="mode-guide-list"></ul>
                     </details>
                 </section>
@@ -59,7 +60,7 @@
                 <div id="summary" class="summary">—</div>
             </div>
             <div class="content" style="padding-top: 0;">
-                <p class="legend">Tests appear one by one. Open each card note to see what we tried and why it helps.
+                <p class="legend">Tests appear one by one. Open each card note to see what should happen and why, in simple steps.
                 </p>
                 <div id="reportsHistory" class="reports-history"></div>
             </div>

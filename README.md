@@ -1,5 +1,45 @@
 # Frontend Calculator
 
+## Features
+
+- Addition, subtraction, multiplication and division with decimals and signed numbers.
+- Standard operation order and nested parentheses.
+- Mouse and keyboard controls: Enter or `=`, Backspace, Escape and C.
+- Error messages for invalid expressions and division by zero; a manual test checklist.
+
+## Intentional precision limits
+
+For a simple display, results less than **0.000000000001 (`1e-12`)** from the nearest whole number are intentionally shown as that whole number. For example, `0.00000000000001` becomes `0`.
+
+Results are also rounded to at most **15 significant digits**, not 15 decimal places. These rules are defined in [docs/app.js](docs/app.js):
+
+- `normalizeFloatingError()`: `Math.abs(value - nearestInt) < 1e-12`.
+- `formatResult()`: `Number(normalized.toPrecision(15)).toString()`.
+
+**If these small differences matter, do not use this calculator. Use a tool designed for higher precision.** Scientific-notation input and mathematical functions are not supported.
+
+## Run on your own computer (for your own modification)
+
+1. Clone this repository.
+2. Open a terminal in the project root.
+3. Run:
+
+```bash
+cd docs
+python3 -m http.server 8080
+```
+
+4. Open in your browser:
+
+- http://localhost:8080/calculator.html
+- http://localhost:8080/availability_and_math_correct_test.html
+
+5. Edit files, refresh the browser, and test your own changes.
+
+---
+---
+
+
 ## A short story about this project
 
 This project started as my personal frontend practice, long before I used AI tools.
@@ -39,11 +79,10 @@ Because of this setup, the [live site](https://noa-jou.github.io/Frontend-Calcul
 ## What this new version offers
 
 - Still built with basic HTML, CSS, and JavaScript (no framework)
-- Cleaner calculation logic with correct operator precedence
+- Keyboard support (Enter, Backspace, Escape, C)
 - Parentheses support, including nested parentheses and unary +/- handling
 - Multiplication input flexibility: `x`, `X`, and `*` are treated the same
 - Better input validation and clearer error handling for invalid expressions
-- Keyboard support (Enter, Backspace, Escape, C)
 - Safer behavior for edge cases like divide-by-zero and malformed input
 - Cleaner display formatting for common floating-point noise (example: `0.30000000000000004` -> `0.3`)
 - A visual test dashboard with step-by-step categories (availability, math, accessibility, security, and fuzz/invariant checks)
@@ -56,25 +95,6 @@ Because of this setup, the [live site](https://noa-jou.github.io/Frontend-Calcul
 - Locale formats and advanced math syntax are not supported yet (for example comma decimals like `3,14`, scientific notation, or function-style input).
 
 
-## Run on your own computer (for your own modification)
-
-1. Clone this repository.
-2. Open a terminal in the project root.
-3. Run:
-
-```bash
-cd docs
-python3 -m http.server 8080
-```
-
-4. Open in your browser:
-
-- http://localhost:8080/calculator.html
-- http://localhost:8080/availability_and_math_correct_test.html
-
-5. Edit files, refresh the browser, and test your own changes.
-
-
 ## Why I share this
 
 I hope this project helps all learners like me understand how to handle calculations correctly on the frontend using only core web frontend technologies.
@@ -85,6 +105,6 @@ If this project is useful to you, I will be very happy.
 
 
 
-## Support my creation 
+## Support me by
 
 [Buy me a coffee](https://buymeacoffee.com/noajou)

@@ -1,1832 +1,1457 @@
-// -----------------------------------------------------------------------------
-// Beginner map for this file:
-// 1) Grab page elements + mode settings.
-// 2) Build reusable helpers for formatting, iframe access, and rendering.
-// 3) Run category test functions (run...Tests).
-// 4) Orchestrate the full run in runAllTests().
-// -----------------------------------------------------------------------------
+// Strict mode catches mistakes such as using an undeclared variable.
+'use strict';
 
+// HOW TO READ THIS FILE
+//
+// 1. Test builders:
+//    Create the data for math, precision-policy and behavior checks.
+//
+// 2. groups:
+//    Store all questions, answers and explanations.
+//
+// 3. Helper functions:
+//    Perform small jobs such as pressing buttons and comparing values.
+//
+// 4. runCase:
+//    Run ONE question and return its result.
+//
+// 5. renderResult:
+//    Turn ONE result into a visible card.
+//
+// 6. runSelectedGroup:
+//    Coordinate a complete run of the SELECTED group.
+
+// These controls belong to the test page.
 var frame = document.getElementById('calcFrame');
-// Cache frequently used DOM nodes once, then reuse them across functions.
 var runBtn = document.getElementById('runBtn');
-var modeSelectEl = document.getElementById('modeSelect');
-var statusEl = document.getElementById('status');
-var summaryEl = document.getElementById('summary');
-var categorySummaryEl = document.getElementById('categorySummary');
-var reportsHistoryEl = document.getElementById('reportsHistory');
-var modeGuideDetailsEl = document.getElementById('modeGuideDetails');
-var modeGuideSummaryEl = document.getElementById('modeGuideSummary');
-var modeGuideTitleEl = document.getElementById('modeGuideTitle');
-var modeGuideCopyEl = document.getElementById('modeGuideCopy');
-var modeGuideListEl = document.getElementById('modeGuideList');
-var modeGuideTipEl = document.getElementById('modeGuideTip');
+var modeSelect = document.getElementById('modeSelect');
 
-// Tolerance for floating-point comparisons
-var FLOAT_TOLERANCE = 1e-10;
-var TEST_STEP_DELAY_MS = 260;
-var CATEGORY_STEP_DELAY_MS = 420;
-var TEST_MODE = modeSelectEl ? modeSelectEl.value : 'math';
+// The iframe contains a different document: calculator.html.
+// Two runs must not use that same calculator at the same time.
+var running = false;
 
-// Mode config drives labels, guide text, and which category keys are enabled.
-var TEST_MODE_CONFIG = {
+// Each run receives a separate report number.
+var runCounter = 0;
+
+
+// ------------------------------------------------------------
+// 1. Build test data
+// ------------------------------------------------------------
+
+// Create a math question. This function does NOT calculate anything.
+//
+// expr:
+//     What to enter.
+//
+// expected:
+//     The independently worked-out answer.
+//     Do not ask the calculator to create its own expected answer:
+//     a broken calculator could agree with itself and pass.
+//
+// why:
+//     This question's explanation.
+//
+// note:
+//     Optional extra information.
+function math(expr, expected, why, note) {
+    return {
+        name: expr,
+        expr: expr,
+        expected: expected,
+        what:
+            'Press C, enter ' + expr +
+            ' with the buttons, then press =.',
+        why: why,
+        note: note || ''
+    };
+}
+
+// Create a check for an intentional display rule.
+//
+// expectedDisplay is TEXT because we are checking the screen.
+//
+// exactAnswer is stored separately.
+// This prevents PASS from being mistaken for exact mathematics.
+function precisionCheck(expr, expectedDisplay, exactAnswer, why) {
+    return {
+        kind: 'precision-policy',
+        name: 'Intentional precision limit: ' + expr,
+        expr: expr,
+        expectedDisplay: expectedDisplay,
+        exactAnswer: exactAnswer,
+        what:
+            'Press C, enter ' + expr +
+            ' with the buttons, then press =.',
+        why: why,
+        note:
+            'PASS means the display follows the intentional precision rule. ' +
+            'It does not mean the displayed value is the exact mathematical answer.'
+    };
+}
+
+// Create a behavior question.
+//
+// run is a function stored for later.
+// Passing it here does not execute it.
+//
+// Later, runCase calls test.run(context).
+function check(name, what, why, run) {
+    return {
+        name: name,
+        what: what,
+        why: why,
+        run: run
+    };
+}
+
+
+// ------------------------------------------------------------
+// 2. Questions
+// ------------------------------------------------------------
+
+// These keys match the HTML option values:
+// math, practical, full and usability.
+//
+// Each item in a tests array is one question.
+var groups = {
     math: {
-        label: 'Core Math',
-        simpleDescription: 'Runs only the core math section. This section owns test cases #1-46.',
-        kidTip: 'Choose this if you want core calculations and validation checks only.',
-        approxTests: 46,
-        categoryKeys: ['availability', 'basic-math', 'decimal-precision', 'error-handling', 'input-validation']
+        label: '1. Basic operations',
+        guide:
+            'Start with addition and subtraction, then multiplication and division. ' +
+            'In mixed sums, multiply and divide first. ' +
+            'Operations with the same priority go from left to right.',
+        tests: [
+            math(
+                '2+3',
+                5,
+                'Start with 2 counters. Add 3 more: 2 + 3 = 5.'
+            ),
+            math(
+                '9-4',
+                5,
+                'Start with 9 counters. Take away 4. There are 5 left.'
+            ),
+            math(
+                '0+7',
+                7,
+                'Adding zero adds nothing, so 7 stays 7.'
+            ),
+            math(
+                '7-7',
+                0,
+                'Take away all 7 counters. None are left, so the answer is 0.'
+            ),
+            math(
+                '12-5+2',
+                9,
+                'Addition and subtraction have the same priority. ' +
+                'Go left to right: 12 - 5 = 7, then 7 + 2 = 9.'
+            ),
+            math(
+                '10-3-2',
+                5,
+                'Go left to right: 10 - 3 = 7, then 7 - 2 = 5. ' +
+                'Do not combine 3 - 2 first.'
+            ),
+            math(
+                '3*4',
+                12,
+                'Three groups of 4 make 4 + 4 + 4 = 12.'
+            ),
+            math(
+                '12/3',
+                4,
+                'Share 12 counters equally among 3 groups. Each group gets 4.'
+            ),
+            math(
+                '0*8',
+                0,
+                'Zero groups of 8 contain no counters. The answer is 0.'
+            ),
+            math(
+                '0/5',
+                0,
+                'Share zero counters among 5 groups. Each group gets zero.'
+            ),
+            math(
+                '6/2*3',
+                9,
+                'Multiplication and division have the same priority. ' +
+                'Go left to right: 6 / 2 = 3, then 3 * 3 = 9.'
+            ),
+            math(
+                '24/4/2',
+                3,
+                'Go left to right: 24 / 4 = 6, then 6 / 2 = 3.'
+            ),
+            math(
+                '2+3*4',
+                14,
+                'Multiply first: 3 * 4 = 12. Then add: 2 + 12 = 14.'
+            ),
+            math(
+                '20-12/3',
+                16,
+                'Divide first: 12 / 3 = 4. Then subtract: 20 - 4 = 16.'
+            ),
+            math(
+                '18/3+2*4-1',
+                13,
+                'First divide and multiply: 18 / 3 = 6 and 2 * 4 = 8. ' +
+                'Now go left to right: 6 + 8 - 1 = 14 - 1 = 13.'
+            )
+        ]
     },
+
     practical: {
-        label: 'Daily Use',
-        simpleDescription: 'Runs only the daily-use section. This section owns test cases #47-69.',
-        kidTip: 'Choose this for real-life stories, keyboard checks, and usability basics.',
-        approxTests: 23,
-        categoryKeys: ['real-life-stories', 'floating-point', 'keyboard-input', 'html-structure', 'accessibility']
+        label: '2. Decimals and signed numbers',
+        guide:
+            'Check decimal places, numbers below zero, and the signs of answers. ' +
+            'Test #32 checks the intentional precision limit: a tiny result is ' +
+            'displayed as 0 by design, with the exact answer explained.',
+        tests: [
+            math(
+                '0.1+0.2',
+                0.3,
+                'One tenth plus two tenths makes three tenths: 0.3.'
+            ),
+            math(
+                '1.5-0.7',
+                0.8,
+                'Think in tenths: 15 tenths - 7 tenths = 8 tenths, or 0.8.'
+            ),
+            math(
+                '0.1*0.2',
+                0.02,
+                'One tenth of two tenths is two hundredths: 0.02.'
+            ),
+            math(
+                '5.5/2',
+                2.75,
+                'Share 5.50 equally into two parts. Each part is 2.75, ' +
+                'because 2.75 + 2.75 = 5.50.'
+            ),
+            math(
+                '0.3/0.1',
+                3,
+                'There are three pieces of size 0.1 in 0.3. So 0.3 / 0.1 = 3.'
+            ),
+            math(
+                '-5+3',
+                -2,
+                'Start at -5 on a number line. Move 3 steps right. You arrive at -2.'
+            ),
+            math(
+                '3-5',
+                -2,
+                'Start at 3. Move 5 steps left. You arrive at -2.'
+            ),
+            math(
+                '-5-3',
+                -8,
+                'Start at -5. Subtracting 3 moves 3 more steps left, to -8.'
+            ),
+            math(
+                '2--3',
+                5,
+                'Subtracting a negative reverses the direction: ' +
+                'move 3 steps right from 2. That gives 5.'
+            ),
+            math(
+                '2*-3',
+                -6,
+                'Add -3 twice: -3 + -3 = -6. ' +
+                'A positive number times a negative number is negative.'
+            ),
+            math(
+                '-2*-3',
+                6,
+                'A negative times a negative is positive. ' +
+                'The size is 2 * 3 = 6, so the answer is 6.'
+            ),
+            math(
+                '-12/3',
+                -4,
+                'Three equal shares of -12 are -4 each, ' +
+                'because -4 + -4 + -4 = -12.'
+            ),
+            math(
+                '-12/-3',
+                4,
+                'A negative divided by a negative is positive. ' +
+                'The size is 12 / 3 = 4.'
+            ),
+            math(
+                '-1.5+0.5',
+                -1,
+                'Start at -1.5 and move 0.5 right on the number line. You arrive at -1.'
+            ),
+            math(
+                '0.0000001*0.1',
+                0.00000001,
+                'Multiplying by one tenth divides by 10. Move the decimal point ' +
+                'one place left: 0.0000001 becomes 0.00000001.'
+            ),
+            math(
+                '0.0000001*0.1+1',
+                1.00000001,
+                'Multiply first: 0.0000001 * 0.1 = 0.00000001. ' +
+                'Add 1 to get 1.00000001. Keep the tiny part.'
+            ),
+
+            // Test #32 checks the chosen precision policy.
+            // Its expected DISPLAY is "0".
+            // Its exact mathematical answer is recorded separately.
+            precisionCheck(
+                '0.0000000000001*0.1',
+                '0',
+                '0.00000000000001',
+                'Multiplying by 0.1 divides by 10. The exact answer is 0.00000000000001. ' +
+                'This simple calculator intentionally displays 0 instead. ' +
+                'When displaying a result, it changes a value less than 0.000000000001 ' +
+                'away from the nearest whole number into that whole number. ' +
+                'Think of it as choosing not to show a tiny crumb, even though the crumb exists. ' +
+                'This rule is defined in app.js, in normalizeFloatingError(), using < 1e-12. ' +
+                'formatResult() also keeps at most 15 significant digits, not 15 decimal places. ' +
+                'If these small differences matter, do not use this calculator. ' +
+                'Use a tool designed for higher precision.'
+            ),
+            math(
+                '0.3-0.2-0.1',
+                0,
+                'Work in tenths, from left to right: 3 tenths - 2 tenths = 1 tenth. ' +
+                'Then 1 tenth - 1 tenth = 0.'
+            )
+        ]
     },
+
     full: {
-        label: 'Advanced',
-        simpleDescription: 'Runs only the advanced section. This section owns test cases #70-88.',
-        kidTip: 'Choose this for deeper safety and engine-level checks.',
-        approxTests: 19,
-        categoryKeys: ['security-safety', 'engine-behavior', 'fuzz-invariants']
+        label: '3. Parentheses and nested parentheses',
+        guide:
+            'Parentheses tell us which part to solve first. ' +
+            'With parentheses inside parentheses, start with the innermost pair ' +
+            'and work outward.',
+        tests: [
+            math(
+                '(2+3)*4',
+                20,
+                'Do the parentheses first: 2 + 3 = 5. Then 5 * 4 = 20.'
+            ),
+            math(
+                '2+(3*4)',
+                14,
+                'Inside the parentheses, 3 * 4 = 12. Then 2 + 12 = 14.'
+            ),
+            math(
+                '20/(2+3)',
+                4,
+                'First 2 + 3 = 5. Then share 20 into 5 equal groups: 20 / 5 = 4.'
+            ),
+            math(
+                '(10-2)/(3+1)',
+                2,
+                'Work out both pairs: 10 - 2 = 8 and 3 + 1 = 4. Then 8 / 4 = 2.'
+            ),
+            math(
+                '((2+3))',
+                5,
+                'The inner pair gives 2 + 3 = 5. ' +
+                'The outer pair adds no operation, so the answer stays 5.'
+            ),
+            math(
+                '2*(3+(4*5))',
+                46,
+                'Start deepest: 4 * 5 = 20. Next 3 + 20 = 23. Finally 2 * 23 = 46.'
+            ),
+            math(
+                '((2+3)*4)-6',
+                14,
+                'First 2 + 3 = 5. Then 5 * 4 = 20. Finally 20 - 6 = 14.'
+            ),
+            math(
+                '48/(2*(3+1))',
+                6,
+                'First 3 + 1 = 4. Then 2 * 4 = 8. Finally 48 / 8 = 6.'
+            ),
+            math(
+                '10-(3-1)',
+                8,
+                'First 3 - 1 = 2. Then 10 - 2 = 8. ' +
+                'The parentheses make us subtract 2 as one amount.'
+            ),
+            math(
+                '10-((3-1)*2)',
+                6,
+                'First 3 - 1 = 2. Then 2 * 2 = 4. Finally 10 - 4 = 6.'
+            ),
+            math(
+                '-(2+3)',
+                -5,
+                'First 2 + 3 = 5. ' +
+                'The minus outside changes the sign of the whole answer: -5.'
+            ),
+            math(
+                '(-2)*(-3)',
+                6,
+                'Each pair holds a negative number. ' +
+                'A negative times a negative is positive: 2 * 3 = 6.'
+            ),
+            math(
+                '(0.1+0.2)*10',
+                3,
+                'First 1 tenth + 2 tenths = 3 tenths, or 0.3. Then 0.3 * 10 = 3.'
+            ),
+            math(
+                '((1.5-0.5)*(2+3))/2',
+                2.5,
+                'First 1.5 - 0.5 = 1 and 2 + 3 = 5. ' +
+                'Next 1 * 5 = 5. Finally 5 / 2 = 2.5.'
+            )
+        ]
+    },
+
+    usability: {
+        label: '4. Controls, errors and page checks',
+        guide:
+            'Check useful controls, mistake handling and basic page setup. ' +
+            'Keyboard checks send test events. They do not test real Tab travel ' +
+            'or screen-reader speech. These checks are not a full security ' +
+            'or accessibility review.',
+        tests: [
+            check(
+                'Enter calculates',
+                'Type 1 + 2, then press Enter.',
+                'One plus two is three. Enter should ask for the answer, ' +
+                'just like the equals button.',
+                function (c) {
+                    keys(c, ['1', '+', '2', 'Enter']);
+                    equal(display(c), '3');
+                }
+            ),
+            check(
+                'The equals key calculates',
+                'Type 4 + 5, then press the = key.',
+                'Four plus five is nine. The keyboard equals key should show 9.',
+                function (c) {
+                    keys(c, ['4', '+', '5', '=']);
+                    equal(display(c), '9');
+                }
+            ),
+            check(
+                'Backspace removes only the last character',
+                'Type 123, then press Backspace.',
+                'Only the last digit, 3, should disappear. ' +
+                'The display should still say 12.',
+                function (c) {
+                    keys(c, ['1', '2', '3', 'Backspace']);
+                    equal(display(c), '12');
+                }
+            ),
+            check(
+                'Escape clears the display',
+                'Enter 7 with a button, then press Escape.',
+                'Escape gives us a fresh start. The old 7 should disappear.',
+                function (c) {
+                    enter(c, '7');
+                    keys(c, ['Escape']);
+                    equal(display(c), '');
+                }
+            ),
+            check(
+                'Both c and C clear the display',
+                'Enter 7 before trying each of the c and C keys.',
+                'The small c and capital C are both clear keys. ' +
+                'Each should erase the 7.',
+                function (c) {
+                    ['c', 'C'].forEach(function (key) {
+                        enter(c, '7');
+                        keys(c, [key]);
+                        equal(display(c), '');
+                    });
+                }
+            ),
+            check(
+                'Keyboard parentheses and multiplication',
+                'Type (1 + 2) * 3, then press Enter.',
+                'First 1 + 2 = 3 inside the parentheses. Then 3 times 3 = 9. ' +
+                'These keys must reach the calculator.',
+                function (c) {
+                    keys(c, ['(', '1', '+', '2', ')', '*', '3', 'Enter']);
+                    equal(display(c), '9');
+                }
+            ),
+            check(
+                'Browser shortcuts are left alone',
+                'Enter 7, then send Ctrl+C, Command+C and Alt+C.',
+                'Holding a shortcut key changes the job of C. The calculator ' +
+                'should keep 7 and leave the key event alone.',
+                function (c) {
+                    enter(c, '7');
+
+                    ['ctrlKey', 'metaKey', 'altKey'].forEach(function (modifier) {
+                        var options = {};
+                        options[modifier] = true;
+
+                        var event = keydown(c, 'c', c.doc, options);
+
+                        equal(display(c), '7');
+                        expect(
+                            !event.defaultPrevented,
+                            modifier + ' was blocked.'
+                        );
+                    });
+                }
+            ),
+            check(
+                'Typing in a text box leaves the calculator alone',
+                'Add a temporary text box and send its 8 key event.',
+                'A key sent from a text box belongs there. ' +
+                'It should not add 8 to the calculator or be blocked.',
+                function (c) {
+                    checkEditing(c, 'input');
+                }
+            ),
+            check(
+                'Typing in an editable area leaves the calculator alone',
+                'Add a temporary editable area and send its 8 key event.',
+                'Writing in another area should not change our calculator answer. ' +
+                'The event should remain available to that area.',
+                function (c) {
+                    checkEditing(c, 'div');
+                }
+            ),
+            check(
+                'Division by zero gives a useful error',
+                'Enter 1 / 0 and press =.',
+                'There is no number that makes 0 times that number equal 1. ' +
+                'Show an error about zero and keep the sum so we can fix it.',
+                function (c) {
+                    rejectExpression(c, '1/0', /zero/i);
+                }
+            ),
+            check(
+                'A missing closing parenthesis is rejected',
+                'Enter (2 + 3 without the closing parenthesis.',
+                'An opening parenthesis needs a matching closing one. ' +
+                'The calculator should ask us to fix the sum instead of guessing.',
+                function (c) {
+                    rejectExpression(c, '(2+3', /invalid|error|parenthes/i);
+                }
+            ),
+            check(
+                'Two decimal points in one number are rejected',
+                'Enter 1..2 + 3 and press =.',
+                'A number can have one decimal point. Two dots do not tell us ' +
+                'one clear number, so this sum needs an error.',
+                function (c) {
+                    rejectExpression(c, '1..2+3', /invalid|error|decimal/i);
+                }
+            ),
+            check(
+                'A valid sum still works after an error',
+                'Try 1 / 0, clear it, then calculate 2 + 3.',
+                'One mistake should not break the calculator. ' +
+                'After clearing it, two plus three should give 5.',
+                function (c) {
+                    rejectExpression(c, '1/0', /zero/i);
+                    c.alerts.length = 0;
+
+                    click(c, 'C');
+                    enter(c, '2+3');
+                    click(c, '=');
+
+                    equal(display(c), '5');
+                }
+            ),
+            check(
+                'HTML-looking input stays plain text',
+                'Send <b>7</b> through the input helper used by the buttons.',
+                'These characters should stay text. They should not create ' +
+                'a bold-text element inside the display. This is one small safety check.',
+                function (c) {
+                    expect(
+                        typeof c.win.inputText === 'function',
+                        'The input helper is missing.'
+                    );
+
+                    c.win.inputText('<b>7</b>');
+
+                    equal(display(c), '<b>7</b>');
+                    expect(
+                        c.output.children.length === 0,
+                        'The input created an HTML element.'
+                    );
+                }
+            ),
+            check(
+                'Code-looking input is rejected without running',
+                'Put a harmless test instruction in the display, then press =.',
+                'A calculator should read sums, not follow computer instructions. ' +
+                'Our private test marker must stay at 0 and an error must appear. ' +
+                'This checks only this example.',
+                function (c) {
+                    var key = '__calculatorTestMarker';
+
+                    // Preserve any previous property with this name.
+                    var previous = Object.getOwnPropertyDescriptor(c.win, key);
+
+                    expect(
+                        !previous || previous.configurable,
+                        'The test marker name is already locked.'
+                    );
+
+                    try {
+                        Object.defineProperty(c.win, key, {
+                            value: 0,
+                            writable: true,
+                            configurable: true
+                        });
+
+                        // Buttons cannot enter letters.
+                        // This safety check deliberately inserts text directly.
+                        c.output.textContent = '(window.__calculatorTestMarker=1)';
+                        click(c, '=');
+
+                        equal(c.win[key], 0);
+                        equal(
+                            display(c),
+                            '(window.__calculatorTestMarker=1)'
+                        );
+
+                        expect(
+                            c.alerts.some(function (text) {
+                                return /invalid|error/i.test(text);
+                            }),
+                            'No useful error appeared.'
+                        );
+
+                        c.alerts.length = 0;
+                    } finally {
+                        // Do not leave our temporary marker behind.
+                        if (previous) {
+                            Object.defineProperty(c.win, key, previous);
+                        } else {
+                            delete c.win[key];
+                        }
+                    }
+                }
+            ),
+            check(
+                'Required buttons are enabled and in the tab order',
+                'Check all number, operator, clear and equals buttons.',
+                'A missing or disabled key cannot do its job. A negative tab index ' +
+                'also skips that button during normal Tab travel. ' +
+                'We check these settings, not the actual journey.',
+                function (c) {
+                    '0123456789+-*/().C='.split('').forEach(function (label) {
+                        var button = findButton(c.doc, label);
+
+                        expect(
+                            button &&
+                            !button.disabled &&
+                            button.tabIndex >= 0 &&
+                            button.getAttribute('aria-disabled') !== 'true',
+                            'Unavailable button: ' + label
+                        );
+                    });
+                }
+            ),
+            check(
+                'Buttons have text names',
+                'Check each required button for text or a linked name.',
+                'A name tells us what a button does. For symbol buttons, ' +
+                'we also look for a word such as Add or Clear. ' +
+                'This checks the labels, not a screen reader itself.',
+                function (c) {
+                    '0123456789+-*/().C='.split('').forEach(function (label) {
+                        var button = findButton(c.doc, label);
+                        expect(button, 'Missing button: ' + label);
+
+                        var name = textName(c.doc, button);
+
+                        expect(
+                            name &&
+                            (/^\d$/.test(label) || /[a-z]{2,}/i.test(name)),
+                            'Missing useful name for: ' + label
+                        );
+                    });
+                }
+            ),
+            check(
+                'The answer display has a name and update setting',
+                'Check the actual answer display for its name, meaning and live-update setting.',
+                'A name tells us where the answer is. An output or status element ' +
+                'marks it as a result. A live setting asks reading software to announce ' +
+                'changes; we do not test the spoken voice here.',
+                function (c) {
+                    var role = c.output.getAttribute('role');
+
+                    expect(
+                        c.output.tagName === 'OUTPUT' || role === 'status',
+                        'The display is not marked as a result.'
+                    );
+
+                    expect(
+                        textName(c.doc, c.output),
+                        'The answer display has no text name.'
+                    );
+
+                    var live = c.output.getAttribute('aria-live');
+
+                    expect(
+                        live === 'polite' ||
+                        live === 'assertive' ||
+                        (!live && role === 'status'),
+                        'The display has no supported live-update setting.'
+                    );
+                }
+            ),
+            check(
+                'The browser tab identifies the calculator',
+                'Read the calculator page title.',
+                'A title is like a label on a folder. ' +
+                'The word Calculator helps us find the right tab.',
+                function (c) {
+                    expect(
+                        /calculator/i.test(c.doc.title),
+                        'The page title does not identify the calculator.'
+                    );
+                }
+            ),
+            check(
+                'The English page declares English',
+                'Read the language setting on the calculator page.',
+                'The page is written in English. Its language label helps ' +
+                'reading software choose how to pronounce the words.',
+                function (c) {
+                    expect(
+                        /^en(?:-|$)/i.test(c.doc.documentElement.lang),
+                        'Expected an English language tag, such as en.'
+                    );
+                }
+            ),
+            check(
+                'The mobile viewport uses the device width',
+                'Read the mobile viewport setting and look for zoom restrictions.',
+                'A phone needs a page width that matches its screen. ' +
+                'People should also be allowed to zoom in. ' +
+                'This setting alone does not prove the layout fits.',
+                function (c) {
+                    var meta = c.doc.querySelector('meta[name="viewport"]');
+                    var content = meta ? meta.content : '';
+
+                    expect(
+                        /(?:^|[,;\s])width\s*=\s*device-width(?:$|[,;\s])/i.test(content),
+                        'Missing width=device-width.'
+                    );
+
+                    expect(
+                        !/user-scalable\s*=\s*(?:no|0)(?:$|[,;\s])/i.test(content),
+                        'Zoom is disabled.'
+                    );
+
+                    expect(
+                        !/maximum-scale\s*=/i.test(content),
+                        'A maximum zoom limit is set.'
+                    );
+                }
+            )
+        ]
     }
 };
 
-// Human-friendly names shown in the mode guide checklist.
-var CATEGORY_MODE_LABELS = {
-    'availability': 'Calculator parts exist (buttons, display, main actions)',
-    'html-structure': 'Page basics are set up right (title, language, phone view)',
-    'accessibility': 'Keyboard use and helpful labels',
-    'basic-math': 'Basic equations and order of operations',
-    'real-life-stories': 'Story-style math examples from daily life',
-    'decimal-precision': 'Decimal math and stable rounding',
-    'floating-point': 'Tricky decimal edge cases',
-    'error-handling': 'Clear behavior for impossible math (like divide by zero)',
-    'security-safety': 'Safety checks for strange text input',
-    'engine-behavior': 'Inside logic checks',
-    'fuzz-invariants': 'Many random checks to catch hidden bugs',
-    'input-validation': 'Blocking broken math input',
-    'keyboard-input': 'Keyboard typing works like button clicks'
-};
 
-// Source of truth for category order, runner function, and test counts.
-var TEST_CATEGORY_REGISTRY = [
-    { key: 'availability', label: 'Availability checks', runner: runAvailabilityTests, testCount: 3 },
-    { key: 'basic-math', label: 'Basic math checks', runner: runBasicMathTests, testCount: 20 },
-    { key: 'decimal-precision', label: 'Decimal precision checks', runner: runDecimalTests, testCount: 6 },
-    { key: 'error-handling', label: 'Error handling checks', runner: runErrorHandlingTests, testCount: 5 },
-    { key: 'input-validation', label: 'Input validation checks', runner: runInputValidationTests, testCount: 12 },
-    { key: 'real-life-stories', label: 'Real-life story checks', runner: runStoryProblemTests, testCount: 4 },
-    { key: 'floating-point', label: 'Floating-point edge checks', runner: runFloatPrecisionTests, testCount: 4 },
-    { key: 'keyboard-input', label: 'Keyboard checks', runner: runKeyboardTests, testCount: 8 },
-    { key: 'html-structure', label: 'HTML structure checks', runner: runHTMLStructureTests, testCount: 4 },
-    { key: 'accessibility', label: 'Accessibility checks', runner: runAccessibilityTests, testCount: 3 },
-    { key: 'security-safety', label: 'Security and safety checks', runner: runSecuritySafetyTests, testCount: 6 },
-    { key: 'engine-behavior', label: 'Engine behavior checks', runner: runEngineBehaviorTests, testCount: 7 },
-    { key: 'fuzz-invariants', label: 'Fuzz and invariant checks', runner: runFuzzInvariantTests, testCount: 6 }
-];
+// ------------------------------------------------------------
+// 3. Shared helpers
+// ------------------------------------------------------------
 
-var RUN_COUNTER = 0;
-// Precompute stable global numbering (#1..#88) across all categories.
-var CATEGORY_GLOBAL_INDEX = buildCategoryGlobalIndex();
+// Number the questions across all groups.
+// Inserting a question earlier will change later question numbers.
+var nextNumber = 1;
 
-// Basic utility helpers used across many categories.
-function floatEqual(a, b, tolerance) {
-    tolerance = tolerance || FLOAT_TOLERANCE;
-    return Math.abs(a - b) < tolerance;
-}
-
-function getModeConfig(mode) {
-    return TEST_MODE_CONFIG[mode] || TEST_MODE_CONFIG.full;
-}
-
-function buildCategoryGlobalIndex() {
-    var map = {};
-    var nextNumber = 1;
-
-    for (var i = 0; i < TEST_CATEGORY_REGISTRY.length; i++) {
-        var item = TEST_CATEGORY_REGISTRY[i];
-        var count = item.testCount || 0;
-        var start = nextNumber;
-        var end = start + count - 1;
-
-        map[item.key] = {
-            key: item.key,
-            start: start,
-            end: end,
-            count: count,
-            label: item.label
-        };
-
-        nextNumber = end + 1;
-    }
-
-    return map;
-}
-
-function getModeGlobalRange(mode) {
-    // Returns the global test-number range for one mode (for example #1-46).
-    var modeConfig = getModeConfig(mode);
-    var keys = modeConfig.categoryKeys || [];
-    var minStart = Infinity;
-    var maxEnd = 0;
-    var totalCount = 0;
-
-    for (var i = 0; i < keys.length; i++) {
-        var info = CATEGORY_GLOBAL_INDEX[keys[i]];
-        if (!info) continue;
-
-        if (info.start < minStart) {
-            minStart = info.start;
-        }
-        if (info.end > maxEnd) {
-            maxEnd = info.end;
-        }
-        totalCount += info.count;
-    }
-
-    if (minStart === Infinity || maxEnd === 0) {
-        return null;
-    }
-
-    return {
-        start: minStart,
-        end: maxEnd,
-        count: totalCount
-    };
-}
-
-function formatClockTime(dateObj) {
-    return dateObj.toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+Object.values(groups).forEach(function (group) {
+    group.tests.forEach(function (test) {
+        test.number = nextNumber++;
     });
-}
+});
 
-function createRunReport(modeConfig, modeRange, runStartDate) {
-    // Keep each run as a separate report so learners can compare attempts.
-    var reportDetails = document.createElement('details');
-    reportDetails.className = 'run-report';
-    reportDetails.open = true;
-
-    var summary = document.createElement('summary');
-    summary.textContent = 'Run #' + RUN_COUNTER + ' • ' + modeConfig.label + ' • test #' + modeRange.start + '-' + modeRange.end + ' • starting...';
-
-    var meta = document.createElement('p');
-    meta.className = 'run-report-meta';
-    meta.textContent = 'Start: ' + formatClockTime(runStartDate) + ' • Section range: #' + modeRange.start + '-' + modeRange.end;
-
-    var list = document.createElement('ol');
-    list.className = 'result-list';
-
-    reportDetails.appendChild(summary);
-    reportDetails.appendChild(meta);
-    reportDetails.appendChild(list);
-
-    if (reportsHistoryEl) {
-        reportsHistoryEl.prepend(reportDetails);
-    }
-
-    return {
-        detailsEl: reportDetails,
-        summaryEl: summary,
-        metaEl: meta,
-        listEl: list
-    };
-}
-
-function renderModeGuide(mode) {
-    var modeConfig = getModeConfig(mode);
-    var modeRange = getModeGlobalRange(mode);
-
-    if (!modeGuideSummaryEl || !modeGuideTitleEl || !modeGuideCopyEl || !modeGuideListEl) {
-        return;
-    }
-
-    modeGuideSummaryEl.textContent = 'Mode guide: selected mode details are shown below (click to hide or show)';
-    if (modeRange) {
-        modeGuideTitleEl.textContent = 'Selected now: ' + modeConfig.label + ' (test #' + modeRange.start + '-' + modeRange.end + ', ' + modeRange.count + ' tests)';
-    } else {
-        modeGuideTitleEl.textContent = 'Selected now: ' + modeConfig.label;
-    }
-    modeGuideCopyEl.textContent = modeConfig.simpleDescription;
-    if (modeGuideTipEl) {
-        modeGuideTipEl.textContent = 'Tip: ' + modeConfig.kidTip;
-    }
-
-    modeGuideListEl.innerHTML = '';
-    for (var i = 0; i < modeConfig.categoryKeys.length; i++) {
-        var key = modeConfig.categoryKeys[i];
-        var item = document.createElement('li');
-        item.textContent = CATEGORY_MODE_LABELS[key] || key;
-        modeGuideListEl.appendChild(item);
+// An assertion describes what must be true.
+//
+// Throwing stops the current question.
+// runCase catches that error and records a FAIL.
+function expect(condition, message) {
+    if (!condition) {
+        throw new Error(message);
     }
 }
 
-// Build the exact category run order for the currently selected mode.
-function getCategoryPlanForMode(mode) {
-    var modeConfig = getModeConfig(mode);
-    var enabledKeys = modeConfig.categoryKeys;
-    var plan = [];
+// Exact comparison for text and settings.
+// JSON.stringify makes an empty string visible as "".
+function equal(actual, expected) {
+    expect(
+        actual === expected,
+        'Expected ' + JSON.stringify(expected) +
+        '; got ' + JSON.stringify(actual) + '.'
+    );
+}
 
-    for (var i = 0; i < TEST_CATEGORY_REGISTRY.length; i++) {
-        var item = TEST_CATEGORY_REGISTRY[i];
-        if (enabledKeys.indexOf(item.key) !== -1) {
-            plan.push({ key: item.key, label: item.label, runner: item.runner });
-        }
+// Build one element for the test report.
+//
+// Use textContent so HTML-looking test strings remain text.
+// innerHTML could turn a test string into a real HTML element.
+function node(tag, className, text) {
+    var element = document.createElement(tag);
+
+    if (className) {
+        element.className = className;
     }
 
-    return plan;
-}
-
-function formatDisplayValue(value) {
-    var text = String(value == null ? '' : value);
-    return text === '' ? '(empty)' : text;
-}
-
-function formatComputationDetails(expression, actualText, expectedText, pass, alerts) {
-    var exprLabel = expression || '(empty)';
-    var actualLabel = formatDisplayValue(actualText);
-
-    if (alerts && alerts.length > 0) {
-        return exprLabel + ' -> alert: ' + alerts[0];
+    // 0 and "" can be valid content, so check for undefined.
+    if (text !== undefined) {
+        element.textContent = text;
     }
 
-    if (pass) {
-        return exprLabel + ' = ' + actualLabel;
-    }
-
-    return exprLabel + ' = ' + actualLabel + ' (expected ' + expectedText + ')';
+    return element;
 }
 
-function formatKeySequence(keys) {
-    return '[' + keys.join(' ') + ']';
+// Treat x, X, × and * as equivalent for comparison.
+// This does not change the actual calculator display.
+function normalize(text) {
+    return text
+        .replace(/[xX×]/g, '*')
+        .replace(/\s/g, '');
 }
 
-// Iframe interaction helpers: these functions talk to calculator.html safely.
-function waitForFrameReady() {
-    // The calculator lives in an iframe, so wait until its DOM is ready.
-    return new Promise(function (resolve, reject) {
-        var done = false;
-        var timeoutId = null;
-        var pollId = null;
-
-        function cleanup() {
-            if (pollId) clearInterval(pollId);
-            if (timeoutId) clearTimeout(timeoutId);
-            frame.removeEventListener('load', onLoad);
-        }
-
-        function tryReady() {
-            if (done) return;
-            var win = frame.contentWindow;
-            var doc = frame.contentDocument;
-            if (win && doc && doc.readyState === 'complete' && doc.getElementById('input')) {
-                done = true;
-                cleanup();
-                resolve();
-            }
-        }
-
-        function onLoad() {
-            tryReady();
-        }
-
-        frame.addEventListener('load', onLoad);
-        pollId = setInterval(tryReady, 100);
-        timeoutId = setTimeout(function () {
-            if (done) return;
-            done = true;
-            cleanup();
-            reject(new Error('Timed out while loading calculator iframe.'));
-        }, 8000);
-
-        tryReady();
-    });
-}
-
-function getCalcContext() {
-    var win = frame.contentWindow;
-    var doc = frame.contentDocument;
-    if (!win || !doc) throw new Error('Cannot access iframe window/document.');
-    return { win: win, doc: doc };
-}
-
-function normalizeButtonLabel(label) {
-    if (label === '*' || label === 'x' || label === 'X' || label === '×') {
-        return '*';
-    }
-    return String(label || '').trim();
-}
-
+// Find the actual calculator button.
+//
+// Clicking buttons checks their wiring as well as the math engine.
 function findButton(doc, label) {
-    var wanted = normalizeButtonLabel(label);
-    var buttons = doc.querySelectorAll('button');
-    for (var i = 0; i < buttons.length; i++) {
-        var actual = normalizeButtonLabel((buttons[i].textContent || '').trim());
-        if (actual === wanted) return buttons[i];
-    }
-    return null;
+    return Array.from(doc.querySelectorAll('button')).find(
+        function (button) {
+            return normalize(button.textContent) === normalize(label);
+        }
+    );
 }
 
-function clickButton(doc, label) {
-    var button = findButton(doc, label);
-    if (!button) throw new Error('Button not found: ' + label);
+// c is the calculator context:
+// c.win    = calculator window
+// c.doc    = calculator document
+// c.output = calculator display
+//
+// These belong to the iframe, not to the report page.
+function click(c, label) {
+    var button = findButton(c.doc, label);
+
+    expect(
+        button && !button.disabled,
+        'Missing or disabled button: ' + label
+    );
+
     button.click();
 }
 
-function clearDisplay(ctx) {
-    clickButton(ctx.doc, 'C');
+function display(c) {
+    return c.output.textContent.trim();
 }
 
-function typeExpressionByButtons(ctx, expression) {
-    var expr = String(expression || '').replace(/\s+/g, '');
-    for (var i = 0; i < expr.length; i++) {
-        clickButton(ctx.doc, expr[i]);
-    }
+// Enter one character at a time, then verify the entered expression.
+//
+// A broken input button must not pass just because the final number
+// happens to match the expected answer.
+function enter(c, expression) {
+    expression.split('').forEach(function (character) {
+        click(c, character);
+    });
+
+    equal(normalize(display(c)), expression);
 }
 
-function getDisplayText(doc) {
-    var el = doc.getElementById('input');
-    return ((el && el.textContent) || '').trim();
+// Send a synthetic keyboard event.
+//
+// bubbles:
+//     Lets an event from a field reach a document listener.
+//
+// cancelable:
+//     Lets the listener call preventDefault().
+//
+// These events test JavaScript handling.
+// They do not perform real typing, Tab movement or copy/paste.
+function keydown(c, key, target, options) {
+    var event = new c.win.KeyboardEvent(
+        'keydown',
+        Object.assign(
+            {
+                key: key,
+                bubbles: true,
+                cancelable: true
+            },
+            options
+        )
+    );
+
+    (target || c.doc).dispatchEvent(event);
+
+    // Return the event so tests can inspect defaultPrevented.
+    return event;
 }
 
-function installAlertSpy(ctx) {
-    // Record alert messages instead of showing popups during automated tests.
-    if (!ctx.win.__calcAlertSpy) {
-        var alerts = [];
-        var originalAlert = ctx.win.alert;
-        ctx.win.alert = function (message) {
-            alerts.push(String(message));
-        };
-        ctx.win.__calcAlertSpy = { alerts: alerts, originalAlert: originalAlert };
-    }
-    return ctx.win.__calcAlertSpy;
-}
-
-function resetCapturedAlerts(ctx) {
-    var spy = installAlertSpy(ctx);
-    spy.alerts.length = 0;
-    return spy;
-}
-
-function takeCapturedAlerts(ctx) {
-    var spy = installAlertSpy(ctx);
-    var copy = spy.alerts.slice();
-    spy.alerts.length = 0;
-    return copy;
-}
-
-function pause(ms) {
-    return new Promise(function (resolve) {
-        setTimeout(resolve, ms);
+function keys(c, sequence) {
+    sequence.forEach(function (key) {
+        keydown(c, key);
     });
 }
 
-// UI rendering helpers for result cards and summary text.
-function getFriendlyExplanation(result) {
-    // Short learner-focused explanation used in each result card.
-    var category = result.category || '';
+// Create a temporary editing area.
+// Its keyboard event must not change the calculator's existing 7.
+//
+// finally removes the field even if the check fails.
+function checkEditing(c, tag) {
+    enter(c, '7');
 
-    if (category === 'Availability') {
-        return {
-            what: 'We make sure the calculator has the parts it needs, like buttons and a display.',
-            why: 'Missing parts can make answers wrong or impossible.'
-        };
+    var field = c.doc.createElement(tag);
+
+    if (tag === 'div') {
+        field.contentEditable = 'true';
     }
 
-    if (category === 'HTML Structure') {
-        return {
-            what: 'We check page basics like title, language, and screen setup.',
-            why: 'Good page setup helps the calculator work on phones, tablets, and computers.'
-        };
+    c.doc.body.appendChild(field);
+
+    try {
+        var event = keydown(c, '8', field);
+
+        equal(display(c), '7');
+
+        expect(
+            !event.defaultPrevented,
+            'Typing in the other area was blocked.'
+        );
+    } finally {
+        field.remove();
+    }
+}
+
+// For invalid input, an error is the correct outcome.
+//
+// Check the current app's alert-based interface.
+// The original expression should remain available for correction.
+function rejectExpression(c, expression, messagePattern) {
+    enter(c, expression);
+    click(c, '=');
+
+    equal(normalize(display(c)), expression);
+
+    expect(
+        c.alerts.some(function (text) {
+            return messagePattern.test(text);
+        }),
+        'No useful error message appeared.'
+    );
+
+    // These alerts were expected and have been checked.
+    // Later unexpected alerts must still fail the question.
+    c.alerts.length = 0;
+}
+
+// Look for a label through linked elements, aria-label or text.
+//
+// This is a basic label check, not the browser's full
+// accessible-name calculation.
+function textName(doc, element) {
+    var ids = element.getAttribute('aria-labelledby');
+
+    if (ids) {
+        return ids
+            .trim()
+            .split(/\s+/)
+            .map(function (id) {
+                var label = doc.getElementById(id);
+                return label ? label.textContent.trim() : '';
+            })
+            .join(' ')
+            .trim();
     }
 
-    if (category === 'Accessibility') {
-        return {
-            what: 'We check whether people can use the calculator with keyboard and clear labels.',
-            why: 'This helps more learners use the tool, even without a mouse.'
-        };
+    return (
+        element.getAttribute('aria-label') ||
+        element.textContent ||
+        ''
+    ).trim();
+}
+
+// Compare ordinary numeric answers.
+//
+// "0.3" and "3e-1" are different text but the same number.
+//
+// This function does not change the calculator's rounding rules.
+// Precision-policy tests use their own exact display comparison.
+function matchesAnswer(text, expected) {
+    // Require a complete numeric string.
+    // Reject empty text, partial numbers such as "3abc", and Infinity.
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text)) {
+        return false;
     }
 
-    if (category === 'Basic Math') {
-        return {
-            what: 'We solve common equations and compare with the expected answer.',
-            why: 'This shows the calculator handles everyday math correctly.'
-        };
+    var actual = Number(text);
+
+    if (!Number.isFinite(actual)) {
+        return false;
     }
 
-    if (category === 'Real-Life Stories') {
-        return {
-            what: 'We test math from simple real-life stories, like shopping or sharing.',
-            why: 'People use calculators for real tasks, not only textbook equations.'
-        };
+    if (expected === 0) {
+        return actual === 0;
     }
 
-    if (category === 'Decimal Precision') {
-        return {
-            what: 'We check decimal numbers carefully, including tiny decimal values.',
-            why: 'Money and measurement often use decimals, so this must stay stable.'
-        };
+    // Ordinary math checks reject a changed sign or a lost non-zero value.
+    if (actual === 0 || Math.sign(actual) !== Math.sign(expected)) {
+        return false;
     }
 
-    if (category === 'Floating-Point Edge Cases') {
-        return {
-            what: 'We try tricky decimal equations that can confuse computers.',
-            why: 'These checks catch hidden rounding mistakes before users see them.'
-        };
-    }
+    // A relative allowance shrinks with the expected answer.
+    // A fixed large allowance could accidentally accept 0
+    // instead of a tiny non-zero answer.
+    return Math.abs(actual - expected) <= Math.abs(expected) * 1e-14;
+}
 
-    if (category === 'Error Handling') {
-        return {
-            what: 'We try impossible math, like dividing by zero.',
-            why: 'A clear error is safer than a strange answer.'
-        };
-    }
+// The test page can load before the iframe is ready.
+//
+// Promise:
+//     Represents a result that will be available later.
+//
+// resolve:
+//     The calculator is ready.
+//
+// reject:
+//     Loading or access failed.
+//
+// The coordinator can await this without freezing the browser.
+function waitForCalculator() {
+    return new Promise(function (resolve, reject) {
+        var timer;
+        var timeout;
+        var done = false;
 
-    if (category === 'Security and Safety') {
-        return {
-            what: 'We try strange input to make sure the calculator stays safe.',
-            why: 'Safe behavior prevents broken screens and unsafe actions.'
-        };
-    }
+        // Finish only once and stop both timers.
+        function finish(error, context) {
+            if (done) {
+                return;
+            }
 
-    if (category === 'Engine Behavior') {
-        return {
-            what: 'We check inside calculator rules, not only button clicks.',
-            why: 'Strong inside rules keep answers reliable in many situations.'
-        };
-    }
+            done = true;
+            clearInterval(timer);
+            clearTimeout(timeout);
 
-    if (category === 'Fuzz and Invariants') {
-        return {
-            what: 'We run lots of random math examples to search for hidden bugs.',
-            why: 'Random checks can find problems that fixed examples miss.'
-        };
-    }
+            if (error) {
+                reject(error);
+            } else {
+                resolve(context);
+            }
+        }
 
-    if (category === 'Input Validation') {
-        return {
-            what: 'We type broken math and check that it gets blocked.',
-            why: 'Blocking broken input prevents confusing results.'
-        };
-    }
+        function inspect() {
+            try {
+                var win = frame.contentWindow;
+                var doc = frame.contentDocument;
 
-    if (category === 'Keyboard Input') {
-        return {
-            what: 'We type with keys and check that key actions match button actions.',
-            why: 'Many learners prefer typing, so keyboard behavior must be correct.'
-        };
-    }
+                if (
+                    win &&
+                    doc &&
+                    doc.readyState === 'complete' &&
+                    doc.getElementById('input')
+                ) {
+                    finish(null, {
+                        win: win,
+                        doc: doc,
+                        output: doc.getElementById('input')
+                    });
+                }
+            } catch (error) {
+                finish(
+                    new Error(
+                        'Cannot access calculator.html. ' +
+                        'Open both pages on the same local web server.'
+                    )
+                );
+            }
+        }
 
-    return {
-        what: 'We run this check to confirm one calculator behavior.',
-        why: 'Each test helps us trust the calculator more.'
+        // Keep checking, but do not wait forever.
+        timer = setInterval(inspect, 100);
+
+        timeout = setTimeout(function () {
+            finish(
+                new Error('Calculator did not load within 8 seconds.')
+            );
+        }, 8000);
+
+        // Check immediately too, in case it is already ready.
+        inspect();
+    });
+}
+
+
+// ------------------------------------------------------------
+// 4. Run one question
+// ------------------------------------------------------------
+
+// An ordinary failure returns {pass: false, details: "..."}.
+// It does not stop the other questions.
+//
+// This function checks behavior.
+// renderResult handles the visible card.
+function runCase(c, test) {
+    var oldAlert = c.win.alert;
+
+    // Preserve the display so one test does not leave its input behind.
+    var savedDisplay = Array.from(c.output.childNodes).map(
+        function (child) {
+            return child.cloneNode(true);
+        }
+    );
+
+    var errors = [];
+    var result = {
+        pass: false,
+        details: ''
     };
-}
 
-function renderResult(result, index, targetListEl) {
-    var explanation = getFriendlyExplanation(result);
+    c.alerts = [];
 
-    var item = document.createElement('li');
-    item.className = 'result-item';
-
-    var top = document.createElement('div');
-    top.className = 'result-top';
-
-    var titleWrap = document.createElement('div');
-
-    var title = document.createElement('p');
-    title.className = 'result-title';
-    title.textContent = 'Test #' + index + ': ' + result.name;
-
-    var category = document.createElement('p');
-    category.className = 'result-category';
-    category.textContent = 'Category: ' + (result.category || 'General');
-
-    titleWrap.appendChild(title);
-    titleWrap.appendChild(category);
-
-    var badge = document.createElement('span');
-    badge.className = 'result-badge ' + (result.pass ? 'result-badge-pass' : 'result-badge-fail');
-    badge.textContent = result.pass ? 'PASS' : 'FAIL';
-
-    top.appendChild(titleWrap);
-    top.appendChild(badge);
-
-    var detailsText = document.createElement('p');
-    detailsText.className = 'result-details';
-    detailsText.textContent = result.details;
-
-    var explain = document.createElement('details');
-    explain.className = 'result-explain';
-    if (!result.pass) {
-        explain.open = true;
+    function onError(event) {
+        errors.push(
+            event.message || 'A calculator script error occurred.'
+        );
     }
 
-    var explainTitle = document.createElement('summary');
-    explainTitle.textContent = 'Open this note: what we tested and why';
+    // Capture alerts instead of opening blocking popups.
+    c.win.alert = function (message) {
+        c.alerts.push(String(message));
+    };
 
-    var what = document.createElement('p');
-    what.textContent = 'What we did: ' + explanation.what;
+    // Click and keyboard handlers may report errors outside our call stack.
+    c.win.addEventListener('error', onError);
 
-    var why = document.createElement('p');
-    why.textContent = 'Why this helps: ' + explanation.why;
-
-    explain.appendChild(explainTitle);
-    explain.appendChild(what);
-    explain.appendChild(why);
-
-    item.appendChild(top);
-    item.appendChild(detailsText);
-    item.appendChild(explain);
-
-    if (targetListEl) {
-        targetListEl.appendChild(item);
-    }
-}
-
-function getCategorySummary(results, elapsedMs) {
-    var byCategory = {};
-
-    for (var i = 0; i < results.length; i++) {
-        var catName = results[i].category || 'Unknown';
-        if (!byCategory[catName]) {
-            byCategory[catName] = { pass: 0, total: 0 };
-        }
-        byCategory[catName].total++;
-        if (results[i].pass) {
-            byCategory[catName].pass++;
-        }
-    }
-
-    var categoryLines = [];
-    for (var name in byCategory) {
-        var cat = byCategory[name];
-        categoryLines.push(name + ': ' + cat.pass + '/' + cat.total);
-    }
-
-    if (typeof elapsedMs === 'number') {
-        categoryLines.push('Completed in ' + elapsedMs + 'ms');
-    }
-
-    return categoryLines.join('  •  ');
-}
-
-// -----------------------------------------------------------------------------
-// Test category runners
-// Each run...Tests function returns an array of result objects:
-// { category, name, pass, details, ...optional explanatory fields }
-// -----------------------------------------------------------------------------
-
-// Category runner: checks whether required calculator pieces exist before deeper tests.
-function runAvailabilityTests() {
-    var results = [];
     try {
-        var ctx = getCalcContext();
-        var requiredFunctions = ['inputText', 'clearText', 'calculate', 'evaluateExpression', 'formatResult'];
-        var missingFunctions = [];
-        for (var i = 0; i < requiredFunctions.length; i++) {
-            if (typeof ctx.win[requiredFunctions[i]] !== 'function') {
-                missingFunctions.push(requiredFunctions[i]);
-            }
-        }
+        // Start every question from an empty display.
+        click(c, 'C');
+        equal(display(c), '');
 
-        var requiredButtons = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '-', '*', '/', '(', ')', '.', 'C', '='];
-        var missingButtons = [];
-        for (var j = 0; j < requiredButtons.length; j++) {
-            if (!findButton(ctx.doc, requiredButtons[j])) {
-                missingButtons.push(requiredButtons[j]);
-            }
-        }
+        if (test.run) {
+            // Behavior checks supply their own procedure.
+            test.run(c);
+            result.details = 'The expected behavior was observed.';
+        } else {
+            // Math and precision-policy checks both use calculator buttons.
+            enter(c, test.expr);
+            click(c, '=');
 
-        var displayExists = !!ctx.doc.getElementById('input');
-        var pass = displayExists && missingFunctions.length === 0 && missingButtons.length === 0;
+            var actual = display(c);
 
-        results.push({
-            category: 'Availability',
-            name: 'All required functions exist',
-            pass: missingFunctions.length === 0,
-            details: missingFunctions.length === 0 ? 'Found all functions' : 'Missing: ' + missingFunctions.join(', ')
-        });
+            if (test.kind === 'precision-policy') {
+                // Keep the true answer and chosen display rule visible.
+                result.details =
+                    'Exact answer: ' + test.exactAnswer +
+                    ' | Expected display by design: ' + test.expectedDisplay +
+                    ' | Displayed: ' + (actual || '(empty)');
 
-        results.push({
-            category: 'Availability',
-            name: 'All required buttons present',
-            pass: missingButtons.length === 0,
-            details: missingButtons.length === 0 ? 'Found all buttons' : 'Missing: ' + missingButtons.join(', ')
-        });
-
-        results.push({
-            category: 'Availability',
-            name: 'Display element exists',
-            pass: displayExists,
-            details: displayExists ? 'Element #input found' : 'Element #input missing'
-        });
-    } catch (error) {
-        results.push({
-            category: 'Availability',
-            name: 'Setup error',
-            pass: false,
-            details: error.message
-        });
-    }
-    return results;
-}
-
-// Category runner: verifies arithmetic correctness and operator precedence.
-function runBasicMathTests() {
-    var results = [];
-    var testCases = [
-        { expr: '2+2', expected: 4, name: '2 + 2' },
-        { expr: '5-3', expected: 2, name: '5 - 3' },
-        { expr: '3*4', expected: 12, name: '3 × 4' },
-        { expr: '8/2', expected: 4, name: '8 ÷ 2' },
-        { expr: '2+3*4', expected: 14, name: 'Precedence: 2 + 3 × 4' },
-        { expr: '10-2*3', expected: 4, name: 'Precedence: 10 - 2 × 3' },
-        { expr: '6/2*3', expected: 9, name: 'Left-to-right: 6 ÷ 2 × 3' },
-        { expr: '2*-3', expected: -6, name: 'Negative operand: 2 × -3' },
-        { expr: '2--3', expected: 5, name: 'Double minus: 2 - -3' },
-        { expr: '-5+3', expected: -2, name: 'Leading negative: -5 + 3' },
-        { expr: '(2+3)*4', expected: 20, name: 'Parentheses: (2 + 3) × 4' },
-        { expr: '2*(3+4)', expected: 14, name: 'Parentheses: 2 × (3 + 4)' },
-        { expr: '(2+3)*(4-1)', expected: 15, name: 'Parentheses: (2 + 3) × (4 - 1)' },
-        { expr: '2*(-3+5)', expected: 4, name: 'Parentheses with negative: 2 × (-3 + 5)' },
-        { expr: '-(2+3)', expected: -5, name: 'Unary before parentheses: -(2 + 3)' },
-        { expr: '(-2)*(-8)', expected: 16, name: 'Both negative groups: (-2) × (-8)' },
-        { expr: '((2+3)*4)-5', expected: 15, name: 'Nested parentheses: ((2 + 3) × 4) - 5' },
-        { expr: '2*(3+(4*(5-2)))', expected: 30, name: 'Deep nesting: 2 × (3 + (4 × (5 - 2)))' },
-        { expr: '(0.5+0.25)/(0.5-0.25)', expected: 3, name: 'Fraction relation: (0.5 + 0.25) ÷ (0.5 - 0.25)' },
-        { expr: '((12.5-2.5)/2)*(3+1)', expected: 20, name: 'Mixed decimal nesting: ((12.5 - 2.5) ÷ 2) × (3 + 1)' }
-    ];
-
-    for (var i = 0; i < testCases.length; i++) {
-        var tc = testCases[i];
-        try {
-            var ctx = getCalcContext();
-            resetCapturedAlerts(ctx);
-            clearDisplay(ctx);
-            typeExpressionByButtons(ctx, tc.expr);
-            clickButton(ctx.doc, '=');
-            var alerts = takeCapturedAlerts(ctx);
-            var actualText = getDisplayText(ctx.doc);
-            var actualNumber = parseFloat(actualText);
-            var tolerance = tc.tolerance || FLOAT_TOLERANCE;
-            var pass = alerts.length === 0 && !isNaN(actualNumber) && floatEqual(actualNumber, tc.expected, tolerance);
-
-            var details = formatComputationDetails(tc.expr, actualText, tc.expected, pass, alerts);
-
-            results.push({
-                category: 'Basic Math',
-                name: tc.name,
-                pass: pass,
-                details: details
-            });
-        } catch (error) {
-            results.push({
-                category: 'Basic Math',
-                name: tc.name,
-                pass: false,
-                details: error.message
-            });
-        }
-    }
-    return results;
-}
-
-// Category runner: validates practical story-style equations learners relate to.
-function runStoryProblemTests() {
-    var results = [];
-    var testCases = [
-        {
-            expr: '(3*2)+1',
-            expected: 7,
-            name: 'Snack shop story: 3 snacks at 2 each, then +1 drink',
-            what: 'We turn a short shopping story into a math expression and verify the total.',
-            why: 'People often use calculators for prices and totals in real life.'
-        },
-        {
-            expr: '(24+18)/6',
-            expected: 7,
-            name: 'Sharing story: split 24 and 18 candies among 6 kids',
-            what: 'We test grouping and division in a sharing scenario.',
-            why: 'Fair sharing problems are common and must be calculated correctly.'
-        },
-        {
-            expr: '(50-12.5)+7.5',
-            expected: 45,
-            name: 'Allowance story: start 50, spend 12.5, receive 7.5',
-            what: 'We combine subtraction and addition with decimals like money.',
-            why: 'Many users trust calculators for budgeting and savings updates.'
-        },
-        {
-            expr: '(8+2)*3',
-            expected: 30,
-            name: 'Measurement story: (8 + 2) groups repeated 3 times',
-            what: 'We check that parentheses are solved before multiplication in a repeated-group story.',
-            why: 'Order of operations is essential for word-problem style calculations.'
-        }
-    ];
-
-    for (var i = 0; i < testCases.length; i++) {
-        var tc = testCases[i];
-        try {
-            var ctx = getCalcContext();
-            resetCapturedAlerts(ctx);
-            clearDisplay(ctx);
-            typeExpressionByButtons(ctx, tc.expr);
-            clickButton(ctx.doc, '=');
-            var alerts = takeCapturedAlerts(ctx);
-
-            var actual = parseFloat(getDisplayText(ctx.doc));
-            var pass = alerts.length === 0 && floatEqual(actual, tc.expected, 1e-10);
-
-            var details = formatComputationDetails(tc.expr, actual, tc.expected, pass, alerts);
-
-            results.push({
-                category: 'Real-Life Stories',
-                name: tc.name,
-                pass: pass,
-                details: details,
-                what: tc.what,
-                why: tc.why
-            });
-        } catch (error) {
-            results.push({
-                category: 'Real-Life Stories',
-                name: tc.name,
-                pass: false,
-                details: error.message,
-                what: tc.what,
-                why: tc.why
-            });
-        }
-    }
-
-    return results;
-}
-
-// Category runner: checks decimal calculations and rounding stability.
-function runDecimalTests() {
-    var results = [];
-    var testCases = [
-        { expr: '0.1+0.2', expected: 0.3, name: '0.1 + 0.2 (classic float bug)', tolerance: 1e-10 },
-        { expr: '1.5*2', expected: 3, name: '1.5 × 2' },
-        { expr: '5.5/2', expected: 2.75, name: '5.5 ÷ 2', tolerance: 1e-10 },
-        { expr: '0.3*3', expected: 0.9, name: '0.3 × 3', tolerance: 1e-10 },
-        { expr: '0.1+0.2+0.3', expected: 0.6, name: 'Decimal chain: 0.1 + 0.2 + 0.3', tolerance: 1e-10 },
-        { expr: '(0.1+0.2)*10', expected: 3, name: 'Scaled decimal with parentheses: (0.1 + 0.2) × 10', tolerance: 1e-10 }
-    ];
-
-    for (var i = 0; i < testCases.length; i++) {
-        var tc = testCases[i];
-        try {
-            var ctx = getCalcContext();
-            resetCapturedAlerts(ctx);
-            clearDisplay(ctx);
-            typeExpressionByButtons(ctx, tc.expr);
-            clickButton(ctx.doc, '=');
-            var alerts = takeCapturedAlerts(ctx);
-            var actual = parseFloat(getDisplayText(ctx.doc));
-            var tol = tc.tolerance || FLOAT_TOLERANCE;
-            var pass = alerts.length === 0 && floatEqual(actual, tc.expected, tol);
-
-            var details = formatComputationDetails(tc.expr, actual, '≈ ' + tc.expected, pass, alerts);
-
-            results.push({
-                category: 'Decimal Precision',
-                name: tc.name,
-                pass: pass,
-                details: details
-            });
-        } catch (error) {
-            results.push({
-                category: 'Decimal Precision',
-                name: tc.name,
-                pass: false,
-                details: error.message
-            });
-        }
-    }
-    return results;
-}
-
-// Category runner: stress-tests known floating-point edge cases.
-function runFloatPrecisionTests() {
-    var results = [];
-    // Tests from Project Review section 2 - Calculation correctness
-    var testCases = [
-        // 1/3*3 should be approximately 1, not 0.9999999999
-        { expr: '1/3*3', expected: 1, name: '1 ÷ 3 × 3 (should be 1, not 0.999...)', tolerance: 1e-9 },
-        // Very small number test: 0.0000001 * 0.1 + 1 should be ≈ 1.00000001, not 2
-        { expr: '0.0000001*0.1+1', expected: 1.00000001, name: '0.0000001 × 0.1 + 1', tolerance: 1e-10 },
-        { expr: '0.7-0.6', expected: 0.1, name: 'Tiny difference: 0.7 - 0.6', tolerance: 1e-10 },
-        { expr: '(1/9)*9', expected: 1, name: 'Repeat fraction check: (1 ÷ 9) × 9', tolerance: 1e-9 }
-    ];
-
-    for (var i = 0; i < testCases.length; i++) {
-        var tc = testCases[i];
-        try {
-            var ctx = getCalcContext();
-            resetCapturedAlerts(ctx);
-            clearDisplay(ctx);
-            typeExpressionByButtons(ctx, tc.expr);
-            clickButton(ctx.doc, '=');
-            var alerts = takeCapturedAlerts(ctx);
-            var actual = parseFloat(getDisplayText(ctx.doc));
-            var tol = tc.tolerance || FLOAT_TOLERANCE;
-            var pass = alerts.length === 0 && floatEqual(actual, tc.expected, tol);
-
-            var details = formatComputationDetails(tc.expr, actual, '≈ ' + tc.expected, pass, alerts);
-
-            results.push({
-                category: 'Floating-Point Edge Cases',
-                name: tc.name,
-                pass: pass,
-                details: details
-            });
-        } catch (error) {
-            results.push({
-                category: 'Floating-Point Edge Cases',
-                name: tc.name,
-                pass: false,
-                details: error.message
-            });
-        }
-    }
-    return results;
-}
-
-// Category runner: ensures impossible operations fail in a clear way.
-function runErrorHandlingTests() {
-    var results = [];
-    var testCases = [
-        { expr: '1/0', name: 'Division by zero: 1 ÷ 0' },
-        { expr: '0/0', name: 'Zero division by zero: 0 ÷ 0' },
-        { expr: '1/0+2', name: 'Invalid chain: 1 ÷ 0 + 2' },
-        { expr: '1/(2-2)', name: 'Hidden divide by zero: 1 ÷ (2 - 2)' },
-        { expr: '(3+5)/(7-7)', name: 'Parentheses divide by zero: (3 + 5) ÷ (7 - 7)' }
-    ];
-
-    for (var i = 0; i < testCases.length; i++) {
-        var tc = testCases[i];
-        try {
-            var ctx = getCalcContext();
-            resetCapturedAlerts(ctx);
-
-            clearDisplay(ctx);
-            typeExpressionByButtons(ctx, tc.expr);
-            clickButton(ctx.doc, '=');
-
-            var alerts = takeCapturedAlerts(ctx);
-            var alertShown = alerts.length > 0;
-            var alertMsg = alertShown ? alerts[0] : '(no alert)';
-            var hasErrorKeyword = alertMsg.indexOf('divide') !== -1 || alertMsg.indexOf('error') !== -1 || alertMsg.indexOf('invalid') !== -1;
-            var pass = alertShown && hasErrorKeyword;
-
-            var details = pass
-                ? tc.expr + ' -> alert: ' + alertMsg
-                : tc.expr + ' -> expected error alert, got: ' + alertMsg;
-
-            results.push({
-                category: 'Error Handling',
-                name: tc.name,
-                pass: pass,
-                details: details
-            });
-        } catch (error) {
-            results.push({
-                category: 'Error Handling',
-                name: tc.name,
-                pass: false,
-                details: error.message
-            });
-        }
-    }
-    return results;
-}
-
-// Category runner: confirms malformed expressions are blocked safely.
-function runInputValidationTests() {
-    var results = [];
-    var testCases = [
-        { expr: '', name: 'Empty input', shouldError: true },
-        { expr: '1..2', name: 'Double decimal point', shouldError: true },
-        { expr: '2+', name: 'Trailing operator', shouldError: true },
-        { expr: '+5', name: 'Leading plus operator' },
-        { expr: '1+++2', name: 'Triple plus operator', shouldError: true },
-        { expr: '2**3', name: 'Double multiplication', shouldError: true },
-        { expr: '(2+3', name: 'Unclosed parenthesis', shouldError: true },
-        { expr: '2+)', name: 'Closing parenthesis without opening', shouldError: true },
-        { expr: '2+()', name: 'Empty parenthesis pair', shouldError: true },
-        { expr: '2(3+4)', name: 'Missing operator before parenthesis', shouldError: true },
-        { expr: '((2+3)', name: 'Double open parentheses not closed', shouldError: true },
-        { expr: '2*/3', name: 'Mixed operator pair 2*/3', shouldError: true }
-    ];
-
-    for (var i = 0; i < testCases.length; i++) {
-        var tc = testCases[i];
-        try {
-            var ctx = getCalcContext();
-            resetCapturedAlerts(ctx);
-
-            clearDisplay(ctx);
-            if (tc.expr) {
-                typeExpressionByButtons(ctx, tc.expr);
-            }
-            clickButton(ctx.doc, '=');
-
-            var alerts = takeCapturedAlerts(ctx);
-            var alertShown = alerts.length > 0;
-            var result = getDisplayText(ctx.doc);
-            var isInfinityOrNaN = result === 'Infinity' || result === 'NaN';
-
-            var pass = tc.shouldError ? (alertShown || isInfinityOrNaN) : !alertShown && !isInfinityOrNaN;
-            var exprLabel = tc.expr || '(empty)';
-            var resultLabel = formatDisplayValue(result);
-            var details;
-
-            if (pass && tc.shouldError) {
-                details = exprLabel + ' -> blocked (alert: ' + (alertShown ? 'yes' : 'no') + ', display: ' + resultLabel + ')';
-            } else if (pass) {
-                details = exprLabel + ' = ' + resultLabel;
+                // This is a real check, not an unconditional PASS.
+                expect(
+                    actual === test.expectedDisplay,
+                    result.details
+                );
             } else {
-                details = exprLabel + ' -> unexpected (alert: ' + (alertShown ? 'yes' : 'no') + ', display: ' + resultLabel + ')';
-            }
+                result.details =
+                    'Expected: ' + test.expected +
+                    ' | Displayed: ' + (actual || '(empty)');
 
-            results.push({
-                category: 'Input Validation',
-                name: tc.name,
-                pass: pass,
-                details: details
-            });
-        } catch (error) {
-            results.push({
-                category: 'Input Validation',
-                name: tc.name,
-                pass: false,
-                details: error.message
-            });
+                expect(
+                    matchesAnswer(actual, test.expected),
+                    result.details
+                );
+            }
         }
-    }
-    return results;
-}
 
-// Category runner: ensures keyboard behavior matches button-click behavior.
-function runKeyboardTests() {
-    var results = [];
-    var testCases = [
-        { keys: ['1', '+', '2', 'Enter'], expected: '3', name: 'Enter key calculates: 1 + 2' },
-        { keys: ['5', 'Backspace'], expected: '', name: 'Backspace deletes character' },
-        { keys: ['1', '+', '2', 'Escape'], expected: '', name: 'Escape clears display' },
-        { keys: ['3', '+', '4', 'c'], expected: '', name: 'c key clears display' },
-        { keys: ['(', '1', '+', '2', ')', '*', '3', 'Enter'], expected: '9', name: 'Keyboard parentheses: (1 + 2) × 3' },
-        { keys: ['(', '2', '+', '3', ')', 'Backspace', ')', 'Enter'], expected: '5', name: 'Keyboard edit with parentheses and Backspace' },
-        { keys: ['-', '(', '2', '+', '3', ')', 'Enter'], expected: '-5', name: 'Keyboard unary sign before parentheses: -(2 + 3)' },
-        { keys: ['1', '+', '+', 'Backspace', '2', 'Enter'], expected: '3', name: 'Keyboard correction flow: remove mistaken operator with Backspace' }
-    ];
-
-    for (var i = 0; i < testCases.length; i++) {
-        var tc = testCases[i];
-        try {
-            var ctx = getCalcContext();
-            resetCapturedAlerts(ctx);
-            clearDisplay(ctx);
-
-            for (var j = 0; j < tc.keys.length; j++) {
-                var event = new ctx.win.KeyboardEvent('keydown', {
-                    key: tc.keys[j],
-                    bubbles: true,
-                    cancelable: true
-                });
-                ctx.doc.dispatchEvent(event);
-            }
-
-            var alerts = takeCapturedAlerts(ctx);
-            var actual = getDisplayText(ctx.doc);
-            var pass = alerts.length === 0 && actual === tc.expected;
-            var keySequence = formatKeySequence(tc.keys);
-
-            var details;
-            if (pass) {
-                details = 'keys ' + keySequence + ' -> ' + formatDisplayValue(actual);
-            } else if (alerts.length > 0) {
-                details = 'keys ' + keySequence + ' -> alert: ' + alerts[0];
-            } else {
-                details = 'keys ' + keySequence + ' -> ' + formatDisplayValue(actual) + ' (expected ' + tc.expected + ')';
-            }
-
-            results.push({
-                category: 'Keyboard Input',
-                name: tc.name,
-                pass: pass,
-                details: details
-            });
-        } catch (error) {
-            results.push({
-                category: 'Keyboard Input',
-                name: tc.name,
-                pass: false,
-                details: error.message
-            });
-        }
-    }
-    return results;
-}
-
-// Category runner: checks safety behavior (injection, invalid input, robust handlers).
-function runSecuritySafetyTests() {
-    var results = [];
-
-    function pushResult(name, pass, details, what, why) {
-        results.push({
-            category: 'Security and Safety',
-            name: name,
-            pass: pass,
-            details: details,
-            what: what,
-            why: why
-        });
-    }
-
-    try {
-        var ctx = getCalcContext();
-        var doc = ctx.doc;
-        var output = doc.getElementById('input');
-
-        // 1) Ensure display uses textContent, not HTML execution.
-        clearDisplay(ctx);
-        resetCapturedAlerts(ctx);
-        var htmlPayload = '<img src=x onerror=alert(1)>';
-        ctx.win.inputText(htmlPayload);
-        var hasInjectedImage = !!output.querySelector('img');
-        var passHtmlEscaping = !hasInjectedImage && output.textContent === htmlPayload;
-        pushResult(
-            'Display treats HTML as text',
-            passHtmlEscaping,
-            passHtmlEscaping
-                ? 'Payload remained plain text; no DOM injection occurred.'
-                : 'HTML-like payload affected the DOM unexpectedly.',
-            'Inserted an HTML-looking string through the same input helper used by the app.',
-            'Using text-only output prevents script/HTML injection via expression text.'
+        // Expected alerts were checked and cleared by their questions.
+        // Any remaining alerts are unexpected.
+        expect(
+            c.alerts.length === 0,
+            'Unexpected alert: ' + c.alerts.join('; ')
         );
 
-        // 2) Verify keydown handling does not interfere with active input fields.
-        clearDisplay(ctx);
-        var tempInput = doc.createElement('input');
-        doc.body.appendChild(tempInput);
-        tempInput.value = '';
-        tempInput.dispatchEvent(new ctx.win.KeyboardEvent('keydown', {
-            key: '7',
-            bubbles: true,
-            cancelable: true
-        }));
-        var passInputFieldIgnore = getDisplayText(doc) === '';
-        tempInput.remove();
-        pushResult(
-            'Keyboard handler ignores typed input fields',
-            passInputFieldIgnore,
-            passInputFieldIgnore
-                ? 'Pressing 7 on an input field did not modify calculator display.'
-                : 'Calculator display changed while typing inside an input field.',
-            'Dispatched keyboard input from a temporary <input> element.',
-            'Users editing form fields should not accidentally trigger calculator shortcuts.'
+        expect(
+            errors.length === 0,
+            errors.join('; ')
         );
 
-        // 3) Verify contentEditable also bypasses calculator keyboard shortcuts.
-        clearDisplay(ctx);
-        var editable = doc.createElement('div');
-        editable.contentEditable = 'true';
-        doc.body.appendChild(editable);
-        editable.dispatchEvent(new ctx.win.KeyboardEvent('keydown', {
-            key: '8',
-            bubbles: true,
-            cancelable: true
-        }));
-        var passEditableIgnore = getDisplayText(doc) === '';
-        editable.remove();
-        pushResult(
-            'Keyboard handler ignores contenteditable areas',
-            passEditableIgnore,
-            passEditableIgnore
-                ? 'Pressing 8 in contenteditable area did not affect calculator display.'
-                : 'Calculator display changed while typing in contenteditable area.',
-            'Dispatched keyboard input from a temporary contenteditable region.',
-            'Content editing areas should keep normal typing behavior without calculator interference.'
-        );
-
-        // 4) Confirm invalid character expressions fail safely.
-        resetCapturedAlerts(ctx);
-        output.textContent = '2+alert(1)';
-        ctx.win.calculate();
-        var invalidAlerts = takeCapturedAlerts(ctx);
-        var passInvalidChars = invalidAlerts.length > 0 && output.textContent === '2+alert(1)';
-        pushResult(
-            'Invalid character expression is rejected safely',
-            passInvalidChars,
-            passInvalidChars
-                ? 'Expression was rejected with alert and original text stayed visible.'
-                : 'Invalid character expression was not handled safely.',
-            'Ran calculate() on expression containing unsupported letters and function-like text.',
-            'Invalid input must fail predictably instead of partially evaluating or mutating state unpredictably.'
-        );
-
-        // 5) Confirm divide-by-zero preserves user expression text after alert.
-        resetCapturedAlerts(ctx);
-        output.textContent = '1/0';
-        ctx.win.calculate();
-        var zeroAlerts = takeCapturedAlerts(ctx);
-        var passKeepExpression = zeroAlerts.length > 0 && output.textContent === '1/0';
-        pushResult(
-            'Error does not erase user expression',
-            passKeepExpression,
-            passKeepExpression
-                ? 'After divide-by-zero, expression remained for user correction.'
-                : 'Expression changed unexpectedly after divide-by-zero error.',
-            'Triggered divide-by-zero and checked display content after alert handling.',
-            'Keeping the original text helps users quickly correct mistakes.'
-        );
-
-        // 6) Lightweight static check that core functions do not use eval/new Function.
-        var sourceText = [
-            ctx.win.evaluateExpression,
-            ctx.win.calculate,
-            ctx.win.tokenizeExpression
-        ].map(function (fn) {
-            return typeof fn === 'function' ? fn.toString() : '';
-        }).join('\n');
-        var passNoEval = !/\beval\s*\(/.test(sourceText) && !/\bFunction\s*\(/.test(sourceText);
-        pushResult(
-            'Core engine avoids eval/new Function',
-            passNoEval,
-            passNoEval
-                ? 'No eval/new Function detected in key calculation functions.'
-                : 'Found eval/new Function usage in key calculation functions.',
-            'Inspected function source text for dynamic code execution patterns.',
-            'Avoiding dynamic execution is safer and easier to reason about.'
-        );
+        // PASS is assigned only after all checks succeed.
+        result.pass = true;
     } catch (error) {
-        results.push({
-            category: 'Security and Safety',
-            name: 'Security test runner setup',
-            pass: false,
-            details: error.message
-        });
+        result.details = error.message;
+    } finally {
+        // Cleanup happens after both PASS and FAIL.
+        c.win.alert = oldAlert;
+        c.win.removeEventListener('error', onError);
+
+        // Pass the saved nodes as separate replaceChildren arguments.
+        c.output.replaceChildren.apply(c.output, savedDisplay);
     }
 
-    return results;
+    return result;
 }
 
-// Category runner: validates internal calculator behavior beyond basic click paths.
-function runEngineBehaviorTests() {
-    var results = [];
 
-    function pushResult(name, pass, details, what, why) {
-        results.push({
-            category: 'Engine Behavior',
-            name: name,
-            pass: pass,
-            details: details,
-            what: what,
-            why: why
-        });
+// ------------------------------------------------------------
+// 5. Show results and the selected group's guide
+// ------------------------------------------------------------
+
+// Keep the existing CSS classes so style2.css still styles the cards.
+function renderResult(test, result, group, list) {
+    var item = node('li', 'result-item');
+    var top = node('div', 'result-top');
+    var title = node('div');
+
+    title.append(
+        node(
+            'p',
+            'result-title',
+            'Test #' + test.number + ': ' + test.name
+        ),
+        node(
+            'p',
+            'result-category',
+            'Category: ' + group.label
+        )
+    );
+
+    top.append(
+        title,
+        node(
+            'span',
+            'result-badge ' +
+                (result.pass ? 'result-badge-pass' : 'result-badge-fail'),
+            result.pass ? 'PASS' : 'FAIL'
+        )
+    );
+
+    var explanation = node('details', 'result-explain');
+
+    // Show failed explanations immediately.
+    // Also keep the precision-policy explanation open when it passes,
+    // so the intentional limitation remains visible.
+    explanation.open =
+        !result.pass || test.kind === 'precision-policy';
+
+    explanation.append(
+        node('summary', '', 'What should happen, and why?'),
+        node('p', '', 'What we did: ' + test.what),
+        node('p', '', 'Why: ' + test.why)
+    );
+
+    if (test.note) {
+        explanation.append(
+            node('p', '', 'Note: ' + test.note)
+        );
     }
 
-    try {
-        var ctx = getCalcContext();
-        var doc = ctx.doc;
+    item.append(
+        top,
+        node('p', 'result-details', result.details),
+        explanation
+    );
 
-        var valueX = ctx.win.evaluateExpression('2x3');
-        pushResult(
-            'x multiplication symbol evaluates correctly',
-            valueX === 6,
-            valueX === 6 ? '2x3 = 6' : 'Expected 6, got ' + valueX,
-            'Called evaluateExpression with x as multiplication.',
-            'The UI now displays x, so the engine must support it directly.'
-        );
-
-        var valueTimesChar = ctx.win.evaluateExpression('2×3');
-        pushResult(
-            'Unicode multiplication sign evaluates correctly',
-            valueTimesChar === 6,
-            valueTimesChar === 6 ? '2×3 = 6' : 'Expected 6, got ' + valueTimesChar,
-            'Called evaluateExpression with the unicode times character.',
-            'Users may paste expressions from other apps using × instead of *.'
-        );
-
-        var spacedValue = ctx.win.evaluateExpression(' ( 2 + 3 ) x 4 ');
-        pushResult(
-            'Whitespace and x symbol normalize correctly',
-            spacedValue === 20,
-            spacedValue === 20 ? '( 2 + 3 ) x 4 = 20' : 'Expected 20, got ' + spacedValue,
-            'Evaluated expression with extra spaces and x symbol.',
-            'Robust parsers should handle common spacing differences.'
-        );
-
-        var formatted = ctx.win.formatResult(0.30000000000000004);
-        pushResult(
-            'formatResult reduces common float display noise',
-            formatted === '0.3',
-            formatted === '0.3' ? '0.30000000000000004 formatted as 0.3' : 'Expected 0.3, got ' + formatted,
-            'Formatted a classic floating-point artifact value.',
-            'Readable output is important for user trust.'
-        );
-
-        clearDisplay(ctx);
-        ctx.win.deleteLastChar();
-        var safeBackspace = getDisplayText(doc) === '';
-        pushResult(
-            'deleteLastChar is safe on empty display',
-            safeBackspace,
-            safeBackspace ? 'Empty display remained stable.' : 'Display changed unexpectedly on empty backspace.',
-            'Called deleteLastChar with no expression content.',
-            'Defensive behavior avoids edge-case crashes.'
-        );
-
-        var verifyImplicitMultiply = ctx.win.verify('2(3+4)') === false;
-        pushResult(
-            'verify blocks implicit multiplication form',
-            verifyImplicitMultiply,
-            verifyImplicitMultiply ? '2(3+4) correctly rejected.' : '2(3+4) was unexpectedly accepted.',
-            'Checked validation for missing operator before parentheses.',
-            'The current grammar requires explicit operators for predictable parsing.'
-        );
-
-        var terms = 150;
-        var longExpr = Array(terms).fill('1').join('+');
-        var longValue = ctx.win.evaluateExpression(longExpr);
-        pushResult(
-            'Long addition chain evaluates correctly',
-            longValue === terms,
-            longValue === terms ? 'Long chain result = ' + longValue : 'Expected ' + terms + ', got ' + longValue,
-            'Evaluated a long but valid expression to stress parser/evaluator flow.',
-            'Long-input stability helps prevent hidden edge-case failures.'
-        );
-    } catch (error) {
-        results.push({
-            category: 'Engine Behavior',
-            name: 'Engine behavior test runner setup',
-            pass: false,
-            details: error.message
-        });
-    }
-
-    return results;
+    list.appendChild(item);
 }
 
-// Category runner: uses seeded random expressions to catch hidden regressions.
-function runFuzzInvariantTests() {
-    var results = [];
+// Preview the selected questions without running them.
+// Derive the count from the array instead of maintaining a separate count.
+function renderModeGuide() {
+    var group = groups[modeSelect.value];
 
-    function pushResult(name, pass, details, what, why) {
-        results.push({
-            category: 'Fuzz and Invariants',
-            name: name,
-            pass: pass,
-            details: details,
-            what: what,
-            why: why
-        });
-    }
+    document.getElementById('modeGuideTitle').textContent =
+        'Selected now: ' + group.label +
+        ' (' + group.tests.length + ' tests)';
 
-    function createSeededRandom(seed) {
-        var state = seed >>> 0;
-        return function () {
-            state = (1664525 * state + 1013904223) >>> 0;
-            return state / 4294967296;
-        };
-    }
+    document.getElementById('modeGuideCopy').textContent =
+        group.guide;
 
-    function randomInt(rand, min, max) {
-        return Math.floor(rand() * (max - min + 1)) + min;
-    }
+    var list = document.getElementById('modeGuideList');
 
-    function randomNumberToken(rand, allowSigned) {
-        var whole = randomInt(rand, 1, 9);
-        var text = String(whole);
+    // Remove the old preview before showing the new group.
+    list.replaceChildren();
 
-        if (rand() < 0.35) {
-            text = text + '.' + randomInt(rand, 1, 9);
+    group.tests.forEach(function (test) {
+        var answerText = '';
+
+        if (test.kind === 'precision-policy') {
+            // Do not present intentional rounding as an exact equation.
+            answerText =
+                ' -> expected display: ' + test.expectedDisplay +
+                ' (intentional rounding)';
+        } else if (test.expr) {
+            answerText = ' = ' + test.expected;
         }
 
-        if (allowSigned && rand() < 0.3) {
-            text = '-' + text;
-        }
-
-        return text;
-    }
-
-    function generateExpression(rand, operatorCount) {
-        var operators = ['+', '-', '*', '/'];
-        var expression = randomNumberToken(rand, true);
-
-        for (var i = 0; i < operatorCount; i++) {
-            var op = operators[randomInt(rand, 0, operators.length - 1)];
-            var right = randomNumberToken(rand, false);
-            expression = expression + op + right;
-
-            if (rand() < 0.22) {
-                expression = '(' + expression + ')';
-            }
-        }
-
-        return expression;
-    }
-
-    function referenceEvaluate(ctx, expression) {
-        var compact = ctx.win.normalizeExpressionSymbols(expression).replace(/\s+/g, '');
-
-        if (!/^[0-9+\-*/().]+$/.test(compact)) {
-            throw new Error('Unsafe reference expression: ' + expression);
-        }
-
-        var value = Function('"use strict"; return (' + compact + ');')();
-        if (typeof value !== 'number' || !isFinite(value)) {
-            throw new Error('Reference value not finite');
-        }
-
-        return value;
-    }
-
-    function decorateWithAltSymbols(expression, rand) {
-        var withMultiplySymbols = expression.replace(/\*/g, function () {
-            return rand() < 0.5 ? 'x' : '×';
-        });
-
-        var decorated = '';
-        for (var i = 0; i < withMultiplySymbols.length; i++) {
-            var ch = withMultiplySymbols[i];
-            if ('+-/()x×'.indexOf(ch) !== -1 && rand() < 0.4) {
-                decorated += ' ' + ch + ' ';
-            } else {
-                decorated += ch;
-            }
-        }
-
-        return '  ' + decorated + '  ';
-    }
-
-    try {
-        var ctx = getCalcContext();
-        var sampleRand = createSeededRandom(20261005);
-        var sampleCount = 18;
-        var samples = [];
-
-        for (var i = 0; i < sampleCount; i++) {
-            samples.push(generateExpression(sampleRand, randomInt(sampleRand, 2, 6)));
-        }
-
-        var mismatchCount = 0;
-        var firstMismatch = null;
-        for (var j = 0; j < samples.length; j++) {
-            var sampleExpr = samples[j];
-            var engineValue = ctx.win.evaluateExpression(sampleExpr);
-            var referenceValue = referenceEvaluate(ctx, sampleExpr);
-
-            if (!floatEqual(engineValue, referenceValue, 1e-9)) {
-                mismatchCount++;
-                if (!firstMismatch) {
-                    firstMismatch = {
-                        expr: sampleExpr,
-                        engineValue: engineValue,
-                        referenceValue: referenceValue
-                    };
-                }
-            }
-        }
-
-        var passReferenceMatch = mismatchCount === 0;
-        pushResult(
-            'Deterministic fuzz samples match reference evaluator',
-            passReferenceMatch,
-            passReferenceMatch
-                ? sampleCount + ' random expressions matched a sanitized JS reference evaluator.'
-                : ('Mismatch on "' + firstMismatch.expr + '": engine=' + firstMismatch.engineValue + ', reference=' + firstMismatch.referenceValue),
-            'Generated fixed-seed expressions and compared the calculator result with an independently evaluated reference value.',
-            'Cross-checking many expressions quickly catches parser or precedence regressions.'
+        list.appendChild(
+            node(
+                'li',
+                '',
+                '#' + test.number + ': ' + test.name + answerText
+            )
         );
-
-        var altRand = createSeededRandom(20261006);
-        var altMismatchCount = 0;
-        var firstAltMismatch = null;
-        for (var k = 0; k < samples.length; k++) {
-            var originalExpr = samples[k];
-            var mixedExpr = decorateWithAltSymbols(originalExpr, altRand);
-            var baseValue = ctx.win.evaluateExpression(originalExpr);
-            var mixedValue = ctx.win.evaluateExpression(mixedExpr);
-
-            if (!floatEqual(baseValue, mixedValue, 1e-9)) {
-                altMismatchCount++;
-                if (!firstAltMismatch) {
-                    firstAltMismatch = {
-                        originalExpr: originalExpr,
-                        mixedExpr: mixedExpr,
-                        baseValue: baseValue,
-                        mixedValue: mixedValue
-                    };
-                }
-            }
-        }
-
-        var passAltSymbols = altMismatchCount === 0;
-        pushResult(
-            'x/*/× and whitespace normalization stay equivalent',
-            passAltSymbols,
-            passAltSymbols
-                ? sampleCount + ' mixed-symbol variants produced the same values as their base expressions.'
-                : ('Normalization mismatch: "' + firstAltMismatch.originalExpr + '" vs "' + firstAltMismatch.mixedExpr + '"'),
-            'Converted random expressions to mixed multiplication symbols (x and ×) and random spacing, then re-evaluated.',
-            'People paste expressions from many sources, so equivalent symbols should behave the same.'
-        );
-
-        var identityMismatchCount = 0;
-        var firstIdentityMismatch = null;
-        for (var m = 0; m < samples.length; m++) {
-            var identityExpr = samples[m];
-            var base = ctx.win.evaluateExpression(identityExpr);
-            var wrapped = ctx.win.evaluateExpression('(' + identityExpr + ')');
-            var plusZero = ctx.win.evaluateExpression('(' + identityExpr + ')+0');
-            var timesOne = ctx.win.evaluateExpression('(' + identityExpr + ')*1');
-
-            var same = floatEqual(base, wrapped, 1e-9)
-                && floatEqual(base, plusZero, 1e-9)
-                && floatEqual(base, timesOne, 1e-9);
-
-            if (!same) {
-                identityMismatchCount++;
-                if (!firstIdentityMismatch) {
-                    firstIdentityMismatch = {
-                        expr: identityExpr,
-                        base: base,
-                        wrapped: wrapped,
-                        plusZero: plusZero,
-                        timesOne: timesOne
-                    };
-                }
-            }
-        }
-
-        var passIdentity = identityMismatchCount === 0;
-        pushResult(
-            'Core math invariants hold on random samples',
-            passIdentity,
-            passIdentity
-                ? 'Parentheses wrapping, +0, and *1 invariants held across all random samples.'
-                : ('Invariant mismatch on "' + firstIdentityMismatch.expr + '"'),
-            'Checked that E, (E), (E)+0, and (E)*1 all evaluate to the same value.',
-            'Invariant checks detect subtle state/precedence bugs even when ordinary examples still pass.'
-        );
-
-        var commRand = createSeededRandom(20261007);
-        var pairCount = 12;
-        var commFailCount = 0;
-        var firstCommMismatch = null;
-
-        for (var n = 0; n < pairCount; n++) {
-            var a = randomNumberToken(commRand, true);
-            var b = randomNumberToken(commRand, true);
-            var addAB = ctx.win.evaluateExpression(a + '+' + b);
-            var addBA = ctx.win.evaluateExpression(b + '+' + a);
-            var mulAB = ctx.win.evaluateExpression(a + '*' + b);
-            var mulBA = ctx.win.evaluateExpression(b + '*' + a);
-
-            var passPair = floatEqual(addAB, addBA, 1e-9) && floatEqual(mulAB, mulBA, 1e-9);
-            if (!passPair) {
-                commFailCount++;
-                if (!firstCommMismatch) {
-                    firstCommMismatch = {
-                        a: a,
-                        b: b,
-                        addAB: addAB,
-                        addBA: addBA,
-                        mulAB: mulAB,
-                        mulBA: mulBA
-                    };
-                }
-            }
-        }
-
-        var passCommutativity = commFailCount === 0;
-        pushResult(
-            'Addition and multiplication commutativity spot-check',
-            passCommutativity,
-            passCommutativity
-                ? pairCount + ' random pairs satisfied a+b=b+a and a*b=b*a.'
-                : ('Commutativity mismatch for a=' + firstCommMismatch.a + ', b=' + firstCommMismatch.b),
-            'Evaluated both operand orders for random numeric pairs.',
-            'Order-independent operations should remain stable regardless of input sequence.'
-        );
-
-        var repeatFailCount = 0;
-        var firstRepeatMismatch = null;
-        for (var p = 0; p < Math.min(10, samples.length); p++) {
-            var repeatExpr = samples[p];
-            var r1 = ctx.win.evaluateExpression(repeatExpr);
-            var r2 = ctx.win.evaluateExpression(repeatExpr);
-            var r3 = ctx.win.evaluateExpression(repeatExpr);
-            var repeatOk = floatEqual(r1, r2, 1e-12) && floatEqual(r2, r3, 1e-12);
-
-            if (!repeatOk) {
-                repeatFailCount++;
-                if (!firstRepeatMismatch) {
-                    firstRepeatMismatch = {
-                        expr: repeatExpr,
-                        r1: r1,
-                        r2: r2,
-                        r3: r3
-                    };
-                }
-            }
-        }
-
-        var passRepeatability = repeatFailCount === 0;
-        pushResult(
-            'Repeat evaluation is deterministic',
-            passRepeatability,
-            passRepeatability
-                ? 'Repeated runs produced consistent values for sampled expressions.'
-                : ('Repeat mismatch on "' + firstRepeatMismatch.expr + '": ' + firstRepeatMismatch.r1 + ', ' + firstRepeatMismatch.r2 + ', ' + firstRepeatMismatch.r3),
-            'Re-evaluated the same expression multiple times in a row.',
-            'Deterministic output is important for trust and debuggability.'
-        );
-
-        var copyPasteCases = [
-            '2\u00F73',
-            '4\u22122',
-            '1\uFF0B2',
-            '3,14+2',
-            '9\u20444'
-        ];
-        var badPasteAccepted = [];
-
-        for (var q = 0; q < copyPasteCases.length; q++) {
-            var pastedExpr = copyPasteCases[q];
-            var verifyResult = ctx.win.verify(pastedExpr);
-
-            resetCapturedAlerts(ctx);
-            ctx.doc.getElementById('input').textContent = pastedExpr;
-            ctx.win.calculate();
-            var alertCount = takeCapturedAlerts(ctx).length;
-
-            if (verifyResult !== false || alertCount === 0) {
-                badPasteAccepted.push(pastedExpr);
-            }
-        }
-
-        var passCopyPasteGuard = badPasteAccepted.length === 0;
-        pushResult(
-            'Unsafe copy/paste symbols are rejected safely',
-            passCopyPasteGuard,
-            passCopyPasteGuard
-                ? 'Unicode look-alike operators and comma decimals were rejected with validation alerts.'
-                : 'Unexpectedly accepted: ' + badPasteAccepted.join(', '),
-            'Tried expressions with unicode operator look-alikes and locale-specific punctuation.',
-            'Copy/paste input from chats or documents should fail safely when unsupported.'
-        );
-    } catch (error) {
-        results.push({
-            category: 'Fuzz and Invariants',
-            name: 'Fuzz test runner setup',
-            pass: false,
-            details: error.message
-        });
-    }
-
-    return results;
+    });
 }
 
-// Category runner: checks document-level HTML setup assumptions.
-function runHTMLStructureTests() {
-    var results = [];
-    var ctx = getCalcContext();
-    var doc = ctx.doc;
-    var html = doc.documentElement;
 
-    // Test 1: Document title
-    var titleExists = (doc.title || '').trim().length > 0;
-    results.push({
-        category: 'HTML Structure',
-        name: 'Document has meaningful title',
-        pass: titleExists,
-        details: titleExists ? 'Title: "' + doc.title + '"' : 'Title is empty'
-    });
+// ------------------------------------------------------------
+// 6. Coordinate the selected group
+// ------------------------------------------------------------
 
-    // Test 2: Language attribute
-    var langAttr = html.getAttribute('lang');
-    var hasLang = !!langAttr;
-    results.push({
-        category: 'HTML Structure',
-        name: 'HTML element has lang attribute',
-        pass: hasLang,
-        details: hasLang ? 'lang="' + langAttr + '"' : 'lang attribute missing'
-    });
-
-    // Test 3: Viewport metadata
-    var viewportMeta = doc.querySelector('meta[name="viewport"]');
-    var hasViewport = !!viewportMeta;
-    results.push({
-        category: 'HTML Structure',
-        name: 'Viewport meta tag present',
-        pass: hasViewport,
-        details: hasViewport ? 'Viewport meta tag found' : 'Viewport meta tag missing'
-    });
-
-    // Test 4: Check for output element or semantic display
-    var outputEl = doc.querySelector('output') || doc.querySelector('[role="status"]');
-    var hasSemanticOutput = !!outputEl;
-    var inputLabel = doc.getElementById('input');
-    var pass4 = hasSemanticOutput || (inputLabel && (inputLabel.tagName === 'OUTPUT' || inputLabel.getAttribute('role') === 'status'));
-    results.push({
-        category: 'HTML Structure',
-        name: 'Semantic output element (output or role="status")',
-        pass: pass4,
-        details: pass4 ? 'Found semantic output element' : 'Using generic element for display'
-    });
-
-    return results;
-}
-
-// Category runner: checks baseline accessibility features.
-function runAccessibilityTests() {
-    var results = [];
-    var ctx = getCalcContext();
-    var doc = ctx.doc;
-
-    // Test 1: Button labels (not just symbols)
-    var buttons = doc.querySelectorAll('button');
-    var allButtonsHaveText = true;
-    var unlabelledButtons = [];
-    for (var i = 0; i < buttons.length; i++) {
-        var text = (buttons[i].textContent || '').trim();
-        if (!text) {
-            allButtonsHaveText = false;
-            unlabelledButtons.push('button ' + i);
-        }
+// This was previously called runAllTests.
+//
+// runSelectedGroup is more accurate:
+// it runs ONLY the group selected in the dropdown.
+//
+// async allows await.
+// await pauses this function while it waits,
+// without freezing the entire browser.
+async function runSelectedGroup() {
+    // Prevent two runs from changing the same calculator.
+    if (running) {
+        return;
     }
 
-    results.push({
-        category: 'Accessibility',
-        name: 'All buttons have visible text labels',
-        pass: allButtonsHaveText,
-        details: allButtonsHaveText ? 'All buttons labeled' : 'Unlabelled buttons: ' + unlabelledButtons.join(', ')
-    });
-
-    // Test 2: Check for keyboard event listener
-    var hasKeyboardSupport = typeof ctx.win.handleCalculatorKeydown === 'function';
-    results.push({
-        category: 'Accessibility',
-        name: 'Keyboard event handler implemented',
-        pass: hasKeyboardSupport,
-        details: hasKeyboardSupport ? 'handleCalculatorKeydown function found' : 'No keyboard handler'
-    });
-
-    // Test 3: Check for ARIA labels or descriptions
-    var elementsWithAria = doc.querySelectorAll('[aria-label], [aria-describedby]');
-    var hasAriaSupport = elementsWithAria.length > 0;
-    results.push({
-        category: 'Accessibility',
-        name: 'ARIA labels implemented (optional)',
-        pass: hasAriaSupport,
-        details: hasAriaSupport ? 'Found ' + elementsWithAria.length + ' elements with ARIA' : 'No ARIA labels found'
-    });
-
-    return results;
-}
-
-// -----------------------------------------------------------------------------
-// Main orchestration: run selected mode, stream progress, and save run report.
-// -----------------------------------------------------------------------------
-async function runAllTests() {
-    // Main workflow: lock controls, run selected categories, then unlock controls.
+    running = true;
     runBtn.disabled = true;
-    runBtn.textContent = 'Running...';
-    if (modeSelectEl) {
-        modeSelectEl.disabled = true;
-        TEST_MODE = modeSelectEl.value || TEST_MODE;
+    modeSelect.disabled = true;
+
+    var group = groups[modeSelect.value];
+    var number = ++runCounter;
+    var started = Date.now();
+
+    // Give this run its own report.
+    var report = node('details', 'run-report');
+    report.open = true;
+
+    var heading = node(
+        'summary',
+        '',
+        'Run #' + number + ' • ' + group.label + ' • running...'
+    );
+
+    var meta = node(
+        'p',
+        'run-report-meta',
+        'Started: ' + new Date().toLocaleTimeString()
+    );
+
+    var list = node('ol', 'result-list');
+    report.append(heading, meta, list);
+
+    // Newest report first; previous reports remain underneath.
+    document.getElementById('reportsHistory').prepend(report);
+
+    var status = document.getElementById('status');
+    var summary = document.getElementById('summary');
+    var category = document.getElementById('categorySummary');
+
+    status.textContent = 'Loading calculator.html...';
+    summary.textContent = '—';
+    category.textContent = group.label;
+
+    var passed = 0;
+    var completed = 0;
+
+    // Make the meaning of this group's results explicit.
+    var policyCount = group.tests.filter(function (test) {
+        return test.kind === 'precision-policy';
+    }).length;
+
+    if (policyCount > 0) {
+        meta.textContent +=
+            ' | Includes ' + policyCount +
+            ' intentional precision-policy check.';
     }
-    var categoryPlan = getCategoryPlanForMode(TEST_MODE);
-    var modeConfig = getModeConfig(TEST_MODE);
-    var modeRange = getModeGlobalRange(TEST_MODE);
-
-    if (categoryPlan.length === 0) {
-        categoryPlan = getCategoryPlanForMode('full');
-        modeConfig = getModeConfig('full');
-        modeRange = getModeGlobalRange('full');
-    }
-
-    if (!modeRange) {
-        modeRange = { start: 1, end: 0, count: 0 };
-    }
-
-    RUN_COUNTER++;
-    var runStartDate = new Date();
-    var runReport = createRunReport(modeConfig, modeRange, runStartDate);
-
-    summaryEl.textContent = 'Running ' + modeConfig.label + ' now...';
-    statusEl.textContent = 'Getting ready. We will run ' + modeConfig.label + ' one step at a time.';
-
-    var start = performance.now();
-    var allResults = [];
-    var passCount = 0;
 
     try {
-        await waitForFrameReady();
-        resetCapturedAlerts(getCalcContext());
+        // Wait before touching the iframe's controls.
+        var context = await waitForCalculator();
 
-        // Run one category at a time so progress text stays clear.
-        for (var c = 0; c < categoryPlan.length; c++) {
-            var categoryStep = categoryPlan[c];
-            var categoryInfo = CATEGORY_GLOBAL_INDEX[categoryStep.key];
-            var categoryStart = categoryInfo ? categoryInfo.start : (modeRange.start + allResults.length);
-            statusEl.textContent = 'Step ' + (c + 1) + ' of ' + categoryPlan.length + ': ' + categoryStep.label;
+        // Run one question at a time.
+        // Parallel questions could erase each other's input.
+        for (var test of group.tests) {
+            var result = runCase(context, test);
 
-            var categoryResults = categoryStep.runner();
-            // Render each test immediately for step-by-step feedback.
-            for (var r = 0; r < categoryResults.length; r++) {
-                var currentResult = categoryResults[r];
-                var globalTestNumber = categoryStart + r;
-                allResults.push(currentResult);
+            renderResult(test, result, group, list);
 
-                if (currentResult.pass) {
-                    passCount++;
-                }
+            completed++;
 
-                renderResult(currentResult, globalTestNumber, runReport.listEl);
-
-                summaryEl.textContent = passCount + '/' + allResults.length + ' passed so far';
-                categorySummaryEl.textContent = getCategorySummary(allResults);
-                statusEl.textContent = 'Running Test #' + globalTestNumber + ': ' + currentResult.name;
-
-                await pause(TEST_STEP_DELAY_MS);
+            if (result.pass) {
+                passed++;
             }
 
-            await pause(CATEGORY_STEP_DELAY_MS);
+            status.textContent =
+                'Checked ' + completed +
+                ' of ' + group.tests.length + '.';
+
+            // Let the browser paint each new result.
+            // The delay is for readable progress, not for the arithmetic.
+            await new Promise(function (resolve) {
+                setTimeout(resolve, 80);
+            });
         }
+
+        // Every completed question is either PASS or FAIL.
+        summary.textContent =
+            passed + ' PASS • ' + (completed - passed) + ' FAIL';
+
+        category.textContent =
+            group.label + ': ' + passed + '/' + completed + ' passed';
+
+        heading.textContent =
+            'Run #' + number + ' • ' +
+            group.label + ' • ' + summary.textContent;
+
+        meta.textContent +=
+            ' | Finished in ' +
+            ((Date.now() - started) / 1000).toFixed(1) + 's';
+
+        status.textContent =
+            "Finished. Open any note for that test's explanation.";
     } catch (error) {
-        var setupResult = {
-            category: 'Setup',
-            name: 'Test runner error',
-            pass: false,
-            details: error.message
-        };
+        // A loading or runner problem is different from one wrong answer.
+        // Ordinary question failures are already handled inside runCase.
+        summary.textContent = 'NOT COMPLETED';
 
-        allResults.push(setupResult);
-        renderResult(setupResult, modeRange.start + allResults.length, runReport.listEl);
-    }
+        heading.textContent =
+            'Run #' + number + ' • ' +
+            group.label + ' • could not finish';
 
-    var elapsedMs = Math.round(performance.now() - start);
-    var runEndDate = new Date();
-    var total = allResults.length;
-    var failCount = total - passCount;
+        category.textContent =
+            completed + '/' + group.tests.length + ' tests completed.';
 
-    summaryEl.textContent = passCount + '/' + total + ' passed';
-
-    categorySummaryEl.textContent = getCategorySummary(allResults, elapsedMs);
-    statusEl.textContent = failCount === 0
-        ? '✓ All tests passed. Great job exploring them one by one!'
-        : '✗ ' + failCount + ' test(s) failed. Open each item to learn what needs fixing.';
-
-    runReport.summaryEl.textContent = 'Run #' + RUN_COUNTER + ' • ' + modeConfig.label + ' • test #' + modeRange.start + '-' + modeRange.end + ' • ' + passCount + '/' + total + ' passed';
-    runReport.metaEl.textContent = 'Start: ' + formatClockTime(runStartDate)
-        + ' • End: ' + formatClockTime(runEndDate)
-        + ' • Duration: ' + elapsedMs + 'ms';
-
-    runBtn.disabled = false;
-    runBtn.textContent = 'Run Tests Again';
-    if (modeSelectEl) {
-        modeSelectEl.disabled = false;
-    }
-
-    renderModeGuide(TEST_MODE);
-}
-
-// Startup helpers and event wiring.
-function setIdleState() {
-    // Initial page state before any test run starts.
-    if (modeGuideDetailsEl) {
-        modeGuideDetailsEl.open = true;
-    }
-
-    statusEl.textContent = 'Waiting to start.';
-    summaryEl.textContent = 'Ready to run';
-    if (reportsHistoryEl && reportsHistoryEl.children.length > 0) {
-        categorySummaryEl.textContent = 'Previous run reports are listed below.';
-    } else {
-        categorySummaryEl.textContent = 'No tests run yet.';
+        status.textContent =
+            error.message +
+            ' Keep calculator.html, app.js and the test files ' +
+            'in the same folder and use a local web server.';
+    } finally {
+        // Always allow another attempt, including after loading fails.
+        running = false;
+        runBtn.disabled = false;
+        modeSelect.disabled = false;
     }
 }
 
-if (modeSelectEl) {
-    // Keep guide text synced whenever the learner changes modes.
-    modeSelectEl.addEventListener('change', function () {
-        TEST_MODE = modeSelectEl.value || 'math';
-        renderModeGuide(TEST_MODE);
-    });
-}
 
-// First paint: sync mode guide text and status with default mode.
-renderModeGuide(TEST_MODE);
-setIdleState();
+// ------------------------------------------------------------
+// 7. Connect the page controls
+// ------------------------------------------------------------
 
-runBtn.addEventListener('click', runAllTests);
+// Pass the function itself, without ().
+// The browser will call it when the event happens.
+//
+// Writing runSelectedGroup() here would execute it immediately.
+modeSelect.addEventListener('change', renderModeGuide);
+runBtn.addEventListener('click', runSelectedGroup);
+
+// This immediate call is intentional:
+// show the first group's guide when the page opens.
+renderModeGuide();

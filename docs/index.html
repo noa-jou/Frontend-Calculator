@@ -119,6 +119,34 @@
             margin-top: 16px;
             font-size: 0.92rem;
         }
+
+        .limits {
+            margin-top: 18px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: #fffcf9;
+            padding: 12px 14px;
+        }
+
+        .limits h2 {
+            margin: 0 0 8px;
+            font-size: 1.02rem;
+            color: var(--ink);
+        }
+
+        .limits p .note {
+            margin: 0;
+            font-size: 0.92rem;
+        }
+
+        .limits p code {
+            background-color: black;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 1 em;
+        }
     </style>
 </head>
 
@@ -153,9 +181,26 @@
 
         <p class="note">Built with basic HTML, CSS, and JavaScript for learning and practical frontend calculation
             handling.</p>
+
+        <section class="limits" aria-labelledby="precisionTitle">
+            <h2 id="precisionTitle">Intentional precision limits</h2>
+            <p>By design, a result less than <strong>0.000000000001</strong>
+                from the nearest whole number is displayed as that whole number.
+                For example, <code>0.00000000000001</code> becomes <code>0</code>.
+                Results are also rounded to at most <strong>15 significant digits</strong>,
+                not 15 decimal places.</p>
+            <p class="note"><strong>If these small differences matter, do not use this calculator.
+                    Use a tool designed for higher precision.</strong></p>
+            <p class="note">Defined in <code>app.js</code>:
+                <code>normalizeFloatingError()</code> uses <code>&lt; 1e-12</code>;
+                <code>formatResult()</code> uses <code>toPrecision(15)</code>.
+            </p>
+        </section>
+
         <div class="links">
-            <a class="link-btn link-alt" href="https://github.com/noa-jou/Frontend-Calculator">View GitHub
-                Repository</a>
+            <a class="link-btn link-alt" href="https://github.com/noa-jou/Frontend-Calculator">
+                Let's view the GitHub Repository for more coding details.
+            </a>
         </div>
     </main>
 </body>
