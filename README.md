@@ -1,5 +1,12 @@
 # Frontend Calculator
 
+<p align="center">
+  <img src="docs/icon.png"
+       width="100"
+       height="100"
+       alt="Project icon">
+</p>
+
 ## Features
 
 - Addition, subtraction, multiplication and division with decimals and signed numbers.
