@@ -7,10 +7,16 @@
     <title>Calculator Test Suite</title>
     <link rel="icon" type="image/png" href="./icon.png">
     <link rel="stylesheet" href="./style2.css" />
+    <link rel="stylesheet" href="./style3.css" />
 </head>
 
 <body>
+
     <main class="layout">
+        <div class="panel-nav">
+            <a href="./index.html">Home</a>
+            <a href="./calculator.html">Calculator</a>
+        </div>
         <!-- Panel 1: choose a mode and preview what that mode runs. -->
         <section class="panel">
             <div class="panel-head">
@@ -33,17 +39,22 @@
                 <p class="mode-guide-copy">Start here: 1. Read the mode guide, 2. choose a mode, 3. then click
                     Run Tests.</p>
                 <ul class="mode-compare-list">
-                    <li><strong>1. Basic Operations:</strong> addition and subtraction, then multiplication and division, then mixed sums.</li>
-                    <li><strong>2. Decimals and Signed Numbers:</strong> decimal places, positive and negative numbers, and tiny values.</li>
-                    <li><strong>3. Parentheses and Nested Parentheses:</strong> single pairs of parentheses and parentheses inside parentheses.</li>
-                    <li><strong>4. Controls, Errors and Page Checks:</strong> keyboard use, mistakes, safe text handling and basic page settings.</li>
+                    <li><strong>1. Basic Operations:</strong> addition and subtraction, then multiplication and
+                        division, then mixed sums.</li>
+                    <li><strong>2. Decimals and Signed Numbers:</strong> decimal places, positive and negative numbers,
+                        and tiny values.</li>
+                    <li><strong>3. Parentheses and Nested Parentheses:</strong> single pairs of parentheses and
+                        parentheses inside parentheses.</li>
+                    <li><strong>4. Controls, Errors and Page Checks:</strong> keyboard use, mistakes, safe text handling
+                        and basic page settings.</li>
                 </ul>
                 <section class="mode-guide" aria-live="polite" aria-label="Mode explanation">
                     <details id="modeGuideDetails" class="mode-guide-details" open>
                         <summary id="modeGuideSummary" class="mode-guide-summary">Mode guide: selected mode details
                             are shown below (click to hide or show)</summary>
                         <p id="modeGuideTitle" class="mode-guide-title">Selected now: 1. Basic Operations</p>
-                        <p id="modeGuideCopy" class="mode-guide-copy">Start with addition and subtraction, then multiplication and division. In mixed sums, multiply and divide first.</p>
+                        <p id="modeGuideCopy" class="mode-guide-copy">Start with addition and subtraction, then
+                            multiplication and division. In mixed sums, multiply and divide first.</p>
                         <p class="mode-guide-subtitle">This mode will run these tests:</p>
                         <ul id="modeGuideList" class="mode-guide-list"></ul>
                     </details>
@@ -61,7 +72,8 @@
                 <div id="summary" class="summary">—</div>
             </div>
             <div class="content" style="padding-top: 0;">
-                <p class="legend">Tests appear one by one. Open each card note to see what should happen and why, in simple steps.
+                <p class="legend">Tests appear one by one. Open each card note to see what should happen and why, in
+                    simple steps.
                 </p>
                 <div id="reportsHistory" class="reports-history"></div>
             </div>

@@ -1,0 +1,24 @@
+.panel-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.panel-nav a {
+    padding: 5px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.94);
+    color: #334155;
+    text-decoration: none;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+}
+
+.panel-nav a:hover,
+.panel-nav a:focus-visible {
+    background: #e0f2fe;
+    color: #0c4a6e;
+    outline: 2px solid #38bdf8;
+    outline-offset: 1px;
+}
